@@ -1,0 +1,17 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.orig.*
+.env
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+google-services.json
+GoogleService-Info.plist
+npm-debug.*
+yarn-debug.*
+yarn-error.*

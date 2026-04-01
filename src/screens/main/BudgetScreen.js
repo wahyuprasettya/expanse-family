@@ -1,0 +1,273 @@
+// ============================================================
+// Budget Screen
+// ============================================================
+import React, { useState, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  Alert, Modal
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useSelector, useDispatch } from 'react-redux';
+import { selectUser } from '@store/authSlice';
+import { selectBudgets, setBudgets, removeBudgetLocal } from '@store/budgetSlice';
+import { subscribeToBudgets, addBudget, deleteBudget } from '@services/firebase/budgets';
+import { selectCategories } from '@store/categorySlice';
+import BudgetCard from '@components/budget/BudgetCard';
+import Button from '@components/common/Button';
+import Input from '@components/common/Input';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING, SHADOWS } from '@constants/theme';
+import { formatCurrency, formatDate, parseAmount } from '@utils/formatters';
+import { useTranslation } from '@hooks/useTranslation';
+import { useAppTheme } from '@hooks/useAppTheme';
+
+export const BudgetScreen = ({ navigation }) => {
+  const dispatch = useDispatch();
+  const { t, language } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
+  const user = useSelector(selectUser);
+  const budgets = useSelector(selectBudgets);
+  const categories = useSelector(selectCategories);
+  const now = new Date();
+  const [year] = useState(now.getFullYear());
+  const [month] = useState(now.getMonth() + 1);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [budgetAmount, setBudgetAmount] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsubscribe = subscribeToBudgets(user.uid, year, month, (data) => {
+      dispatch(setBudgets(data));
+    });
+    return unsubscribe;
+  }, [user?.uid, year, month, dispatch]);
+
+  const handleAdd = async () => {
+    if (!selectedCategory || !budgetAmount || parseAmount(budgetAmount) <= 0) {
+      Alert.alert(t('common.error'), t('budget.fillAllFields'));
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await addBudget(user.uid, {
+      categoryId: selectedCategory.id,
+      categoryName: selectedCategory.name,
+      categoryIcon: selectedCategory.icon,
+      amount: parseAmount(budgetAmount),
+      period: 'monthly',
+      month,
+      year,
+      spent: 0,
+    });
+    setLoading(false);
+
+    if (error) {
+      Alert.alert(t('common.error'), error);
+      return;
+    }
+
+    setShowAddModal(false);
+    setSelectedCategory(null);
+    setBudgetAmount('');
+  };
+
+  const handleDelete = (budgetId) => {
+    Alert.alert(t('budget.deleteTitle'), t('budget.deleteMessage'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          await deleteBudget(budgetId);
+          dispatch(removeBudgetLocal(budgetId));
+        },
+      },
+    ]);
+  };
+
+  const totalBudget = budgets.reduce((sum, budget) => sum + budget.amount, 0);
+  const totalSpent = budgets.reduce((sum, budget) => sum + (budget.spent || 0), 0);
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <LinearGradient colors={colors.gradients.header} style={styles.header}>
+        <Text style={styles.title}>{t('budget.title')}</Text>
+        <Text style={styles.subtitle}>{formatDate(new Date(year, month - 1, 1), 'MMM yyyy', language)}</Text>
+        <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
+          <Ionicons name="add" size={24} color={colors.primary} />
+        </TouchableOpacity>
+      </LinearGradient>
+
+      {budgets.length > 0 && (
+        <View style={styles.overallCard}>
+          <View style={styles.overallInfo}>
+            <Text style={styles.overallLabel}>{t('budget.totalBudgetUsed')}</Text>
+            <Text style={styles.overallValues}>
+              <Text style={{ color: totalSpent > totalBudget ? colors.expense : colors.income }}>
+                {Math.round(totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0)}%
+              </Text>
+              <Text style={styles.overallSub}> · {t('budget.leftAmount', {
+                amount: formatCurrency(totalBudget - totalSpent, 'IDR', language),
+              })}</Text>
+            </Text>
+          </View>
+          <View style={styles.overallTrack}>
+            <View
+              style={[
+                styles.overallFill,
+                {
+                  width: `${Math.min(totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0, 100)}%`,
+                  backgroundColor: totalSpent > totalBudget ? colors.expense : colors.primary,
+                },
+              ]}
+            />
+          </View>
+        </View>
+      )}
+
+      {budgets.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyIcon}>🎯</Text>
+          <Text style={styles.emptyText}>{t('budget.noBudgets')}</Text>
+          <Text style={styles.emptySubtext}>{t('budget.setLimits')}</Text>
+          <Button title={t('budget.addBudget')} onPress={() => setShowAddModal(true)} style={styles.emptyBtn} fullWidth={false} />
+        </View>
+      ) : (
+        <FlatList
+          data={budgets}
+          keyExtractor={(budget) => budget.id}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => (
+            <TouchableOpacity onLongPress={() => handleDelete(item.id)}>
+              <BudgetCard budget={item} />
+            </TouchableOpacity>
+          )}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      <Modal visible={showAddModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('budget.addBudgetTitle')}</Text>
+              <TouchableOpacity onPress={() => setShowAddModal(false)}>
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalLabel}>{t('budget.selectCategory')}</Text>
+            <View style={styles.categoryGrid}>
+              {categories.filter((category) => category.type === 'expense' || category.type === 'both').map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[
+                    styles.catItem,
+                    selectedCategory?.id === category.id && styles.catItemSelected,
+                  ]}
+                  onPress={() => setSelectedCategory(category)}
+                >
+                  <Text style={styles.catIcon}>{category.icon}</Text>
+                  <Text style={styles.catName}>{category.name.split(' ')[0]}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Input
+              label={t('budget.monthlyLimit')}
+              value={budgetAmount}
+              onChangeText={setBudgetAmount}
+              placeholder={t('budget.monthlyLimitPlaceholder')}
+              keyboardType="numeric"
+              icon="wallet-outline"
+              prefix="Rp"
+            />
+
+            <Button title={t('budget.setBudget')} onPress={handleAdd} loading={loading} />
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+};
+
+const createStyles = (colors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  title: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: colors.textPrimary, flex: 1 },
+  subtitle: { color: colors.textMuted, fontSize: FONT_SIZE.sm, marginRight: 8 },
+  addBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: `${colors.primary}20`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overallCard: {
+    margin: SPACING.lg,
+    backgroundColor: colors.surface,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...SHADOWS.sm,
+  },
+  overallInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.sm },
+  overallLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm },
+  overallValues: { fontSize: FONT_SIZE.sm },
+  overallSub: { color: colors.textMuted, fontWeight: FONT_WEIGHT.regular },
+  overallTrack: {
+    height: 10,
+    backgroundColor: colors.surfaceVariant,
+    borderRadius: BORDER_RADIUS.full,
+    overflow: 'hidden',
+  },
+  overallFill: { height: '100%', borderRadius: BORDER_RADIUS.full },
+  list: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyIcon: { fontSize: 60, marginBottom: SPACING.md },
+  emptyText: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: colors.textPrimary },
+  emptySubtext: { color: colors.textMuted, fontSize: FONT_SIZE.md, marginBottom: SPACING.lg },
+  emptyBtn: { paddingHorizontal: SPACING.xl },
+  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
+  modalContent: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: BORDER_RADIUS.xl,
+    borderTopRightRadius: BORDER_RADIUS.xl,
+    padding: SPACING.lg,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  modalTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: colors.textPrimary },
+  modalLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, marginBottom: SPACING.sm, fontWeight: '500' },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: SPACING.lg },
+  catItem: {
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minWidth: 70,
+  },
+  catItemSelected: { borderColor: colors.primary, backgroundColor: `${colors.primary}20` },
+  catIcon: { fontSize: 22, marginBottom: 4 },
+  catName: { color: colors.textSecondary, fontSize: FONT_SIZE.xs },
+});
+
+export default BudgetScreen;
