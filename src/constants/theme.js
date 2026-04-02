@@ -113,6 +113,22 @@ export const FONT_WEIGHT = {
   extrabold: '800',
 };
 
+export const FONT_FAMILY = {
+  regular: 'Poppins_400Regular',
+  medium: 'Poppins_500Medium',
+  semibold: 'Poppins_600SemiBold',
+  bold: 'Poppins_700Bold',
+  extrabold: 'Poppins_800ExtraBold',
+};
+
+// Helper: returns fontFamily + fontWeight + optional fontSize in one call
+// Usage: ...typography('bold', FONT_SIZE.md)
+export const typography = (weight = 'regular', size) => ({
+  fontFamily: FONT_FAMILY[weight] || FONT_FAMILY.regular,
+  fontWeight: FONT_WEIGHT[weight] || FONT_WEIGHT.regular,
+  ...(size !== undefined ? { fontSize: size } : {}),
+});
+
 export const SHADOWS = {
   sm: {
     shadowColor: '#000',

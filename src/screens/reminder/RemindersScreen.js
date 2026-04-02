@@ -16,11 +16,16 @@ import { subscribeToReminders, addReminder, deleteReminder } from '@services/fir
 import Input from '@components/common/Input';
 import Button from '@components/common/Button';
 import { formatCurrency, formatDateSmart } from '@utils/formatters';
-import { Colors, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING, SHADOWS } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useAppTheme } from '@hooks/useAppTheme';
+import { useTranslation } from '@hooks/useTranslation';
 
 export const RemindersScreen = ({ navigation }) => {
   const dispatch = useDispatch();
+  const { colors } = useAppTheme();
+  const { t, language } = useTranslation();
+  const styles = createStyles(colors);
   const user = useSelector(selectUser);
   const reminders = useSelector(selectReminders);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -45,7 +50,7 @@ export const RemindersScreen = ({ navigation }) => {
 
   const handleAdd = async () => {
     if (!form.name.trim() || !form.amount) {
-      Alert.alert('Error', 'Please fill required fields');
+      Alert.alert(t('common.error'), t('reminders.fillRequired'));
       return;
     }
     setLoading(true);
@@ -53,17 +58,17 @@ export const RemindersScreen = ({ navigation }) => {
       ...form,
       amount: parseFloat(form.amount) || 0,
       daysBefore: parseInt(form.daysBefore) || 1,
-    });
+    }, t);
     setLoading(false);
-    if (error) Alert.alert('Error', error);
+    if (error) Alert.alert(t('common.error'), error);
     else { setShowAddModal(false); setForm({ name: '', amount: '', category: 'Bills', dueDate: new Date().toISOString(), daysBefore: '1', isRecurring: true }); }
   };
 
   const handleDelete = (r) => {
-    Alert.alert('Delete Reminder', `Remove "${r.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('reminders.deleteTitle'), t('reminders.deleteMessage', { name: r.name }), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete', style: 'destructive',
+        text: t('common.delete'), style: 'destructive',
         onPress: async () => {
           await deleteReminder(r.id, r.notificationId);
           dispatch(removeReminderLocal(r.id));
@@ -74,33 +79,33 @@ export const RemindersScreen = ({ navigation }) => {
 
   const daysUntilDue = (dueDate) => {
     const diff = Math.ceil((new Date(dueDate) - new Date()) / (1000 * 60 * 60 * 24));
-    if (diff < 0) return 'Overdue';
-    if (diff === 0) return 'Due today';
-    return `${diff} day${diff !== 1 ? 's' : ''} left`;
+    if (diff < 0) return t('reminders.overdue');
+    if (diff === 0) return t('reminders.dueToday');
+    return t('reminders.daysLeft', { count: diff });
   };
 
   const getDueColor = (dueDate) => {
     const diff = Math.ceil((new Date(dueDate) - new Date()) / (1000 * 60 * 60 * 24));
-    if (diff <= 0) return Colors.expense;
-    if (diff <= 3) return Colors.warning;
-    return Colors.textSecondary;
+    if (diff <= 0) return colors.expense;
+    if (diff <= 3) return colors.warning;
+    return colors.textSecondary;
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <LinearGradient colors={['#1E293B', '#0F172A']} style={styles.header}>
-        <Text style={styles.title}>Bill Reminders</Text>
+      <LinearGradient colors={colors.gradients.header} style={styles.header}>
+        <Text style={styles.title}>{t('reminders.title')}</Text>
         <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
-          <Ionicons name="add" size={24} color={Colors.primary} />
+          <Ionicons name="add" size={24} color={colors.primary} />
         </TouchableOpacity>
       </LinearGradient>
 
       {reminders.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🔔</Text>
-          <Text style={styles.emptyText}>No reminders yet</Text>
-          <Text style={styles.emptySubtext}>Add bill schedules to stay on track</Text>
-          <Button title="Add Reminder" onPress={() => setShowAddModal(true)} style={styles.emptyBtn} fullWidth={false} />
+          <Text style={styles.emptyText}>{t('reminders.emptyTitle')}</Text>
+          <Text style={styles.emptySubtext}>{t('reminders.emptySubtitle')}</Text>
+          <Button title={t('reminders.addReminder')} onPress={() => setShowAddModal(true)} style={styles.emptyBtn} fullWidth={false} />
         </View>
       ) : (
         <FlatList
@@ -112,23 +117,23 @@ export const RemindersScreen = ({ navigation }) => {
             <TouchableOpacity onLongPress={() => handleDelete(r)} style={styles.reminderCard}>
               <View style={styles.reminderLeft}>
                 <View style={styles.reminderIcon}>
-                  <Ionicons name="receipt-outline" size={22} color={Colors.primary} />
+                  <Ionicons name="receipt-outline" size={22} color={colors.primary} />
                 </View>
                 <View>
                   <Text style={styles.reminderName}>{r.name}</Text>
                   <Text style={styles.reminderCategory}>{r.category}</Text>
-                  <Text style={styles.reminderDate}>Due: {formatDateSmart(r.dueDate)}</Text>
+                  <Text style={styles.reminderDate}>{t('home.dueLabel', { date: formatDateSmart(r.dueDate, language) })}</Text>
                 </View>
               </View>
               <View style={styles.reminderRight}>
-                <Text style={styles.reminderAmount}>{formatCurrency(r.amount)}</Text>
+                <Text style={styles.reminderAmount}>{formatCurrency(r.amount, 'IDR', language)}</Text>
                 <Text style={[styles.dueStatus, { color: getDueColor(r.dueDate) }]}>
                   {daysUntilDue(r.dueDate)}
                 </Text>
                 {r.isRecurring && (
                   <View style={styles.recurringBadge}>
-                    <Ionicons name="repeat" size={10} color={Colors.primary} />
-                    <Text style={styles.recurringText}>Monthly</Text>
+                    <Ionicons name="repeat" size={10} color={colors.primary} />
+                    <Text style={styles.recurringText}>{t('reminders.monthly')}</Text>
                   </View>
                 )}
               </View>
@@ -142,22 +147,22 @@ export const RemindersScreen = ({ navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Bill Reminder</Text>
+              <Text style={styles.modalTitle}>{t('reminders.newReminder')}</Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <Input label="Bill Name" value={form.name} onChangeText={setField('name')} placeholder="e.g. Electricity Bill" icon="document-text-outline" />
-            <Input label="Amount (Rp)" value={form.amount} onChangeText={setField('amount')} placeholder="0" keyboardType="numeric" icon="wallet-outline" prefix="Rp" />
-            <Input label="Category" value={form.category} onChangeText={setField('category')} placeholder="Bills & Utilities" icon="folder-outline" />
-            <Input label="Remind me (days before)" value={form.daysBefore} onChangeText={setField('daysBefore')} keyboardType="numeric" icon="alarm-outline" />
+            <Input label={t('reminders.billName')} value={form.name} onChangeText={setField('name')} placeholder={t('reminders.billPlaceholder')} icon="document-text-outline" />
+            <Input label={t('reminders.amount')} value={form.amount} onChangeText={setField('amount')} placeholder="0" keyboardType="numeric" icon="wallet-outline" prefix="Rp" />
+            <Input label={t('common.category')} value={form.category} onChangeText={setField('category')} placeholder="Bills & Utilities" icon="folder-outline" />
+            <Input label={t('reminders.remindBefore')} value={form.daysBefore} onChangeText={setField('daysBefore')} keyboardType="numeric" icon="alarm-outline" />
 
             <View style={styles.dueRow}>
-              <Text style={styles.dueLabel}>Due Date</Text>
+              <Text style={styles.dueLabel}>{t('reminders.dueDate')}</Text>
               <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.duePicker}>
-                <Text style={styles.duePickerText}>{formatDateSmart(form.dueDate)}</Text>
-                <Ionicons name="calendar-outline" size={18} color={Colors.textMuted} />
+                <Text style={styles.duePickerText}>{formatDateSmart(form.dueDate, language)}</Text>
+                <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -170,16 +175,16 @@ export const RemindersScreen = ({ navigation }) => {
             )}
 
             <View style={styles.toggleRow}>
-              <Text style={styles.toggleLabel}>Recurring Monthly</Text>
+              <Text style={styles.toggleLabel}>{t('reminders.recurringMonthly')}</Text>
               <Switch
                 value={form.isRecurring}
                 onValueChange={setField('isRecurring')}
-                trackColor={{ true: Colors.primary }}
+                trackColor={{ true: colors.primary }}
                 thumbColor="#FFF"
               />
             </View>
 
-            <Button title="Add Reminder" onPress={handleAdd} loading={loading} style={{ marginTop: SPACING.md }} />
+            <Button title={t('reminders.addReminder')} onPress={handleAdd} loading={loading} style={{ marginTop: SPACING.md }} />
           </View>
         </View>
       </Modal>
@@ -187,61 +192,61 @@ export const RemindersScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+const createStyles = (colors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
   },
-  title: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: Colors.textPrimary },
-  addBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: `${Colors.primary}20`, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
+  addBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: `${colors.primary}20`, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
   reminderCard: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: Colors.surface, borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: colors.surface, borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md, marginBottom: SPACING.sm,
-    borderWidth: 1, borderColor: Colors.border, ...SHADOWS.sm,
+    borderWidth: 1, borderColor: colors.border, ...SHADOWS.sm,
   },
   reminderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   reminderIcon: {
     width: 44, height: 44, borderRadius: BORDER_RADIUS.md,
-    backgroundColor: `${Colors.primary}20`, alignItems: 'center', justifyContent: 'center', marginRight: SPACING.md,
+    backgroundColor: `${colors.primary}20`, alignItems: 'center', justifyContent: 'center', marginRight: SPACING.md,
   },
-  reminderName: { color: Colors.textPrimary, fontWeight: FONT_WEIGHT.semibold, fontSize: FONT_SIZE.md },
-  reminderCategory: { color: Colors.textMuted, fontSize: FONT_SIZE.xs },
-  reminderDate: { color: Colors.textSecondary, fontSize: FONT_SIZE.xs, marginTop: 2 },
+  reminderName: { color: colors.textPrimary, fontWeight: FONT_WEIGHT.semibold, fontFamily: FONT_FAMILY.semibold, fontSize: FONT_SIZE.md },
+  reminderCategory: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
+  reminderDate: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 2 },
   reminderRight: { alignItems: 'flex-end' },
-  reminderAmount: { color: Colors.expense, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.md },
-  dueStatus: { fontSize: FONT_SIZE.xs, marginTop: 2 },
+  reminderAmount: { color: colors.expense, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, fontSize: FONT_SIZE.md },
+  dueStatus: { fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 2 },
   recurringBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: `${Colors.primary}20`, borderRadius: BORDER_RADIUS.full,
+    backgroundColor: `${colors.primary}20`, borderRadius: BORDER_RADIUS.full,
     paddingHorizontal: 6, paddingVertical: 2, marginTop: 4,
   },
-  recurringText: { color: Colors.primary, fontSize: 9 },
+  recurringText: { color: colors.primary, fontSize: 9, fontFamily: FONT_FAMILY.regular },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyIcon: { fontSize: 60, marginBottom: SPACING.md },
-  emptyText: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: Colors.textPrimary },
-  emptySubtext: { color: Colors.textMuted, fontSize: FONT_SIZE.md, marginBottom: SPACING.lg, textAlign: 'center' },
+  emptyText: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
+  emptySubtext: { color: colors.textMuted, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.regular, marginBottom: SPACING.lg, textAlign: 'center' },
   emptyBtn: {},
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: Colors.overlay, justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   modalContent: {
-    backgroundColor: Colors.surface, borderTopLeftRadius: BORDER_RADIUS.xl,
+    backgroundColor: colors.surface, borderTopLeftRadius: BORDER_RADIUS.xl,
     borderTopRightRadius: BORDER_RADIUS.xl, padding: SPACING.lg, maxHeight: '92%',
   },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.lg },
-  modalTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: Colors.textPrimary },
+  modalTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
   dueRow: { marginBottom: SPACING.md },
-  dueLabel: { color: Colors.textSecondary, fontSize: FONT_SIZE.sm, fontWeight: '500', marginBottom: 6 },
+  dueLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontWeight: '500', fontFamily: FONT_FAMILY.medium, marginBottom: 6 },
   duePicker: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: Colors.background, borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: colors.background, borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md, borderWidth: 1, borderColor: colors.border,
   },
-  duePickerText: { color: Colors.textPrimary, fontSize: FONT_SIZE.md },
+  duePickerText: { color: colors.textPrimary, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.regular },
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
-  toggleLabel: { color: Colors.textPrimary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.medium },
+  toggleLabel: { color: colors.textPrimary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
 });
 
 export default RemindersScreen;

@@ -27,7 +27,7 @@ export const useInsights = () => {
     // Category spending comparison
     const getCategorySpending = (txList, type = 'expense') => {
       return txList
-        .filter((t) => t.type === type)
+        .filter((t) => type === 'expense' ? t.type === 'expense' || t.type === 'debt' : t.type === type)
         .reduce((acc, t) => {
           acc[t.categoryId] = (acc[t.categoryId] || 0) + t.amount;
           return acc;
@@ -63,8 +63,12 @@ export const useInsights = () => {
       }));
 
     // Total this month vs last month
-    const thisMonthTotal = thisMonth.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-    const lastMonthTotal = lastMonth.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const thisMonthTotal = thisMonth
+      .filter((t) => t.type === 'expense' || t.type === 'debt')
+      .reduce((s, t) => s + t.amount, 0);
+    const lastMonthTotal = lastMonth
+      .filter((t) => t.type === 'expense' || t.type === 'debt')
+      .reduce((s, t) => s + t.amount, 0);
     const overallChange = formatInsightChange(thisMonthTotal, lastMonthTotal);
 
     // Savings rate this month

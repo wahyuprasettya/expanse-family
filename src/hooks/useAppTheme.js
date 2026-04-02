@@ -1,15 +1,19 @@
+import { useColorScheme } from 'react-native';
 import { useSelector } from 'react-redux';
 import { getThemeColors } from '@constants/theme';
 import { selectTheme } from '@store/uiSlice';
 
 export const useAppTheme = () => {
-  const theme = useSelector(selectTheme);
-  const colors = getThemeColors(theme);
+  const themeMode = useSelector(selectTheme);
+  const systemColorScheme = useColorScheme();
+  const resolvedTheme = themeMode === 'system' ? (systemColorScheme || 'light') : themeMode;
+  const colors = getThemeColors(resolvedTheme);
 
   return {
-    theme,
+    theme: resolvedTheme,
+    themeMode,
     colors,
-    isDark: theme === 'dark',
+    isDark: resolvedTheme === 'dark',
   };
 };
 

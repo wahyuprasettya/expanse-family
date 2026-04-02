@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Alert, Modal
+  Alert, Modal, ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,7 +17,7 @@ import { selectCategories } from '@store/categorySlice';
 import BudgetCard from '@components/budget/BudgetCard';
 import Button from '@components/common/Button';
 import Input from '@components/common/Input';
-import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING, SHADOWS } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { formatCurrency, formatDate, parseAmount } from '@utils/formatters';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
@@ -92,6 +92,18 @@ export const BudgetScreen = ({ navigation }) => {
   const totalBudget = budgets.reduce((sum, budget) => sum + budget.amount, 0);
   const totalSpent = budgets.reduce((sum, budget) => sum + (budget.spent || 0), 0);
 
+  const getCategoryDisplayName = (category) => {
+    // If it's a default category, use translation, otherwise use the custom name
+    if (category.isDefault && category.id) {
+      const translatedName = t(`categories.names.${category.id}`);
+      // If translation key doesn't exist, it returns the key itself, so check if it's different
+      return translatedName !== `categories.names.${category.id}` ? translatedName : category.name;
+    }
+    return category.name;
+  };
+
+
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <LinearGradient colors={colors.gradients.header} style={styles.header}>
@@ -160,34 +172,39 @@ export const BudgetScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalLabel}>{t('budget.selectCategory')}</Text>
-            <View style={styles.categoryGrid}>
-              {categories.filter((category) => category.type === 'expense' || category.type === 'both').map((category) => (
-                <TouchableOpacity
-                  key={category.id}
-                  style={[
-                    styles.catItem,
-                    selectedCategory?.id === category.id && styles.catItemSelected,
-                  ]}
-                  onPress={() => setSelectedCategory(category)}
-                >
-                  <Text style={styles.catIcon}>{category.icon}</Text>
-                  <Text style={styles.catName}>{category.name.split(' ')[0]}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <ScrollView showsVerticalScrollIndicator={true} contentContainerStyle={styles.modalScrollContent}>
+              <Text style={styles.modalLabel}>{t('budget.selectCategory')}</Text>
+              <View style={styles.categoryGrid}>
+                {categories.filter((category) => category.type === 'expense' || category.type === 'both').map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={[
+                      styles.catItem,
+                      selectedCategory?.id === category.id && styles.catItemSelected,
 
-            <Input
-              label={t('budget.monthlyLimit')}
-              value={budgetAmount}
-              onChangeText={setBudgetAmount}
-              placeholder={t('budget.monthlyLimitPlaceholder')}
-              keyboardType="numeric"
-              icon="wallet-outline"
-              prefix="Rp"
-            />
+                    ]}
+                    onPress={() => setSelectedCategory(category)}
+                  >
+                    <Text style={styles.catIcon}>{category.icon}</Text>
+                    <Text style={styles.catName}>
+                      {t(`categories.names.${category.id.toLowerCase()}`).split(' ')[0]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-            <Button title={t('budget.setBudget')} onPress={handleAdd} loading={loading} />
+              <Input
+                label={t('budget.monthlyLimit')}
+                value={budgetAmount}
+                onChangeText={setBudgetAmount}
+                placeholder={t('budget.monthlyLimitPlaceholder')}
+                keyboardType="numeric"
+                icon="wallet-outline"
+                prefix="Rp"
+              />
+
+              <Button title={t('budget.setBudget')} onPress={handleAdd} loading={loading} />
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -203,8 +220,8 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
-  title: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: colors.textPrimary, flex: 1 },
-  subtitle: { color: colors.textMuted, fontSize: FONT_SIZE.sm, marginRight: 8 },
+  title: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary, flex: 1 },
+  subtitle: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, marginRight: 8 },
   addBtn: {
     width: 40,
     height: 40,
@@ -212,6 +229,11 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: `${colors.primary}20`,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
   overallCard: {
     margin: SPACING.lg,
@@ -223,9 +245,9 @@ const createStyles = (colors) => StyleSheet.create({
     ...SHADOWS.sm,
   },
   overallInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.sm },
-  overallLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm },
-  overallValues: { fontSize: FONT_SIZE.sm },
-  overallSub: { color: colors.textMuted, fontWeight: FONT_WEIGHT.regular },
+  overallLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
+  overallValues: { fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
+  overallSub: { color: colors.textMuted, fontWeight: FONT_WEIGHT.regular, fontFamily: FONT_FAMILY.regular },
   overallTrack: {
     height: 10,
     backgroundColor: colors.surfaceVariant,
@@ -236,9 +258,9 @@ const createStyles = (colors) => StyleSheet.create({
   list: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyIcon: { fontSize: 60, marginBottom: SPACING.md },
-  emptyText: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: colors.textPrimary },
-  emptySubtext: { color: colors.textMuted, fontSize: FONT_SIZE.md, marginBottom: SPACING.lg },
-  emptyBtn: { paddingHorizontal: SPACING.xl },
+  emptyText: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
+  emptySubtext: { color: colors.textMuted, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.regular, marginBottom: SPACING.lg },
+  emptyBtn: { paddingHorizontal: 0 },
   modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: colors.surface,
@@ -247,14 +269,17 @@ const createStyles = (colors) => StyleSheet.create({
     padding: SPACING.lg,
     maxHeight: '90%',
   },
+  modalScrollContent: {
+    paddingBottom: SPACING.lg,
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SPACING.lg,
   },
-  modalTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: colors.textPrimary },
-  modalLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, marginBottom: SPACING.sm, fontWeight: '500' },
+  modalTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
+  modalLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, marginBottom: SPACING.sm, fontWeight: '500', fontFamily: FONT_FAMILY.medium },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: SPACING.lg },
   catItem: {
     alignItems: 'center',
@@ -267,7 +292,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   catItemSelected: { borderColor: colors.primary, backgroundColor: `${colors.primary}20` },
   catIcon: { fontSize: 22, marginBottom: 4 },
-  catName: { color: colors.textSecondary, fontSize: FONT_SIZE.xs },
+  catName: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
 });
 
 export default BudgetScreen;

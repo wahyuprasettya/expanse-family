@@ -4,13 +4,15 @@
 import 'react-native-url-polyfill/auto';
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
-import { StatusBar, LogBox } from 'react-native';
+import { StatusBar, LogBox, Text, TextInput } from 'react-native';
 import { Provider, useDispatch } from 'react-redux';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
+import { PersistGate } from 'redux-persist/integration/react';
 import * as Notifications from 'expo-notifications';
-import { store } from './src/store';
+import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold, Poppins_800ExtraBold } from '@expo-google-fonts/poppins';
+import { store, persistor } from './src/store';
 import AppNavigator from './src/navigation/AppNavigator';
 import { getLanguagePreference } from './src/services/language';
 import { setLanguage } from './src/store/uiSlice';
@@ -31,9 +33,23 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// ─── Global Font Override ──────────────────────────────────────
+// Ensures Poppins is used as the default font for ALL Text components
+Text.defaultProps = Text.defaultProps || {};
+Text.defaultProps.style = [{ fontFamily: 'Poppins_400Regular' }, Text.defaultProps.style];
+TextInput.defaultProps = TextInput.defaultProps || {};
+TextInput.defaultProps.style = [{ fontFamily: 'Poppins_400Regular' }, TextInput.defaultProps.style];
+
 const AppContent = () => {
   const dispatch = useDispatch();
   const { colors, isDark } = useAppTheme();
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+    Poppins_800ExtraBold,
+  });
 
   useEffect(() => {
     // Handle notification responses (when user taps a notification)
@@ -61,7 +77,7 @@ const AppContent = () => {
         backgroundColor={colors.background}
         translucent={false}
       />
-      <AppNavigator />
+      {fontsLoaded ? <AppNavigator /> : null}
     </>
   );
 };
@@ -70,10 +86,12 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Provider store={store}>
-        <SafeAreaProvider>
-          <AppContent />
-          <Toast />
-        </SafeAreaProvider>
+        <PersistGate loading={null} persistor={persistor}>
+          <SafeAreaProvider>
+            <AppContent />
+            <Toast />
+          </SafeAreaProvider>
+        </PersistGate>
       </Provider>
     </GestureHandlerRootView>
   );

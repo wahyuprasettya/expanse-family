@@ -7,12 +7,13 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { verifyPin, savePin } from '@services/firebase/auth';
-import { setPinVerified } from '@store/authSlice';
+import { setPinVerified, selectProfile } from '@store/authSlice';
 import { useBiometric } from '@hooks/useBiometric';
 import { useTranslation } from '@hooks/useTranslation';
-import { Colors, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING } from '@constants/theme';
+import { useAppTheme } from '@hooks/useAppTheme';
 
 const PIN_LENGTH = 6;
 
@@ -20,6 +21,8 @@ export const PinScreen = ({ mode = 'verify' }) => {
   // mode: 'verify' | 'setup' | 'setup-confirm'
   const dispatch = useDispatch();
   const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
   const [pin, setPin] = useState('');
   const [firstPin, setFirstPin] = useState('');
   const [currentMode, setCurrentMode] = useState(mode);
@@ -27,13 +30,14 @@ export const PinScreen = ({ mode = 'verify' }) => {
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   const { isBiometricSupported, biometricType, authenticate } = useBiometric();
+  const profile = useSelector(selectProfile);
 
   // Try biometric on mount (verify mode)
   useEffect(() => {
-    if (mode === 'verify' && isBiometricSupported) {
+    if (mode === 'verify' && isBiometricSupported && profile?.biometricEnabled) {
       handleBiometric();
     }
-  }, [isBiometricSupported]);
+  }, [isBiometricSupported, profile?.biometricEnabled]);
 
   const shake = () => {
     Animated.sequence([
@@ -110,7 +114,7 @@ export const PinScreen = ({ mode = 'verify' }) => {
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'bio', '0', 'del'];
 
   return (
-    <LinearGradient colors={['#0F172A', '#1E293B']} style={styles.container}>
+    <LinearGradient colors={colors.gradients.header} style={styles.container}>
       <View style={styles.inner}>
         {/* Lock Icon */}
         <View style={styles.iconContainer}>
@@ -146,26 +150,26 @@ export const PinScreen = ({ mode = 'verify' }) => {
               key={key}
               style={[
                 styles.key,
-                key === 'bio' && !isBiometricSupported && styles.keyHidden,
+                key === 'bio' && (!isBiometricSupported || !profile?.biometricEnabled) && styles.keyHidden,
               ]}
               onPress={() => {
                 if (key === 'bio') {
-                  if (isBiometricSupported) handleBiometric();
+                  if (isBiometricSupported && profile?.biometricEnabled) handleBiometric();
                 } else {
                   handleKeyPress(key);
                 }
               }}
               activeOpacity={0.7}
-              disabled={key === 'bio' && !isBiometricSupported}
+              disabled={key === 'bio' && (!isBiometricSupported || !profile?.biometricEnabled)}
             >
               {key === 'del' ? (
-                <Ionicons name="backspace-outline" size={24} color={Colors.textPrimary} />
+                <Ionicons name="backspace-outline" size={24} color={colors.textPrimary} />
               ) : key === 'bio' ? (
-                isBiometricSupported ? (
+                isBiometricSupported && profile?.biometricEnabled ? (
                   <Ionicons
                     name={biometricType === 'face' ? 'scan-outline' : 'finger-print-outline'}
                     size={26}
-                    color={Colors.primary}
+                    color={colors.primary}
                   />
                 ) : <View />
               ) : (
@@ -179,25 +183,26 @@ export const PinScreen = ({ mode = 'verify' }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   inner: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.xl },
   iconContainer: {
     width: 80, height: 80,
     borderRadius: BORDER_RADIUS.xl,
-    backgroundColor: `${Colors.primary}20`,
+    backgroundColor: `${colors.primary}20`,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: SPACING.lg,
-    borderWidth: 1, borderColor: `${Colors.primary}40`,
+    borderWidth: 1, borderColor: `${colors.primary}40`,
   },
   icon: { fontSize: 36 },
   title: {
     fontSize: FONT_SIZE.xxl,
     fontWeight: FONT_WEIGHT.bold,
-    color: Colors.textPrimary,
+    fontFamily: FONT_FAMILY.bold,
+    color: colors.textPrimary,
     marginBottom: 8,
   },
-  subtitle: { color: Colors.textSecondary, fontSize: FONT_SIZE.md, marginBottom: SPACING.xl },
+  subtitle: { color: colors.textSecondary, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.regular, marginBottom: SPACING.xl },
   dotsContainer: {
     flexDirection: 'row',
     marginBottom: SPACING.md,
@@ -207,11 +212,11 @@ const styles = StyleSheet.create({
     width: 16, height: 16,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     backgroundColor: 'transparent',
   },
-  dotFilled: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  attemptsText: { color: Colors.warning, fontSize: FONT_SIZE.sm, marginBottom: SPACING.md },
+  dotFilled: { backgroundColor: colors.primary, borderColor: colors.primary },
+  attemptsText: { color: colors.warning, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, marginBottom: SPACING.md },
   keypad: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -223,15 +228,16 @@ const styles = StyleSheet.create({
   key: {
     width: 76, height: 76,
     borderRadius: BORDER_RADIUS.full,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: Colors.border,
+    borderWidth: 1, borderColor: colors.border,
   },
   keyHidden: { opacity: 0 },
   keyText: {
     fontSize: FONT_SIZE.xxl,
     fontWeight: FONT_WEIGHT.medium,
-    color: Colors.textPrimary,
+    fontFamily: FONT_FAMILY.medium,
+    color: colors.textPrimary,
   },
 });
 

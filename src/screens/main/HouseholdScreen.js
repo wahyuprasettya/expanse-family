@@ -13,8 +13,9 @@ import Input from '@components/common/Input';
 import Button from '@components/common/Button';
 import { selectProfile, selectUser, setProfile } from '@store/authSlice';
 import { useAppTheme } from '@hooks/useAppTheme';
-import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SHADOWS, SPACING } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SHADOWS, SPACING } from '@constants/theme';
 import { getUserProfileByShareCode, joinSharedHousehold } from '@services/firebase/users';
+import { registerForPushNotifications } from '@services/firebase/notifications';
 
 export const HouseholdScreen = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -62,6 +63,10 @@ export const HouseholdScreen = ({ navigation }) => {
       ...profile,
       ...profileUpdates,
     }));
+
+    // Pastikan token push tersimpan juga setelah akun berhasil dipasangkan
+    await registerForPushNotifications(user.uid);
+
     setJoinCode('');
     Alert.alert('Berhasil', 'Akun berhasil terhubung ke pengeluaran bersama.');
   };
@@ -148,6 +153,7 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.textPrimary,
     fontSize: FONT_SIZE.lg,
     fontWeight: FONT_WEIGHT.bold,
+    fontFamily: FONT_FAMILY.bold,
   },
   content: {
     padding: SPACING.lg,
@@ -165,10 +171,12 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.textPrimary,
     fontSize: FONT_SIZE.xl,
     fontWeight: FONT_WEIGHT.bold,
+    fontFamily: FONT_FAMILY.bold,
   },
   heroSubtitle: {
     color: colors.textSecondary,
     fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.regular,
     marginTop: SPACING.sm,
     lineHeight: 22,
   },
@@ -184,18 +192,21 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.textPrimary,
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.semibold,
+    fontFamily: FONT_FAMILY.semibold,
     marginBottom: SPACING.sm,
   },
   codeValue: {
     color: colors.primary,
     fontSize: FONT_SIZE.xxxl,
     fontWeight: FONT_WEIGHT.extrabold,
+    fontFamily: FONT_FAMILY.extrabold,
     letterSpacing: 3,
     marginBottom: SPACING.sm,
   },
   sectionHint: {
     color: colors.textMuted,
     fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.regular,
     lineHeight: 20,
   },
   statusRow: {
@@ -208,11 +219,13 @@ const createStyles = (colors) => StyleSheet.create({
   statusLabel: {
     color: colors.textMuted,
     fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.regular,
   },
   statusValue: {
     color: colors.textPrimary,
     fontSize: FONT_SIZE.sm,
     fontWeight: FONT_WEIGHT.semibold,
+    fontFamily: FONT_FAMILY.semibold,
     maxWidth: '58%',
     textAlign: 'right',
   },

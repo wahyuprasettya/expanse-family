@@ -3,9 +3,11 @@
 // ============================================================
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet, Easing } from 'react-native';
-import { Colors } from '@constants/theme';
+import { useAppTheme } from '@hooks/useAppTheme';
 
-export const LoadingSpinner = ({ size = 40, color = Colors.primary }) => {
+export const LoadingSpinner = ({ size = 40, color }) => {
+  const { colors } = useAppTheme();
+  const spinnerColor = color || colors.primary;
   const rotation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -31,8 +33,8 @@ export const LoadingSpinner = ({ size = 40, color = Colors.primary }) => {
             height: size,
             borderRadius: size / 2,
             borderWidth: size * 0.1,
-            borderColor: `${color}30`,
-            borderTopColor: color,
+            borderColor: `${spinnerColor}30`,
+            borderTopColor: spinnerColor,
             transform: [{ rotate: spin }],
           },
         ]}

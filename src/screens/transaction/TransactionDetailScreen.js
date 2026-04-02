@@ -10,24 +10,27 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTransactions } from '@hooks/useTransactions';
 import { formatCurrency, formatDate, formatTime } from '@utils/formatters';
-import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING, SHADOWS } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
+import { useTranslation } from '@hooks/useTranslation';
 
 export const TransactionDetailScreen = ({ navigation, route }) => {
   const { transaction } = route.params;
   const { deleteTransaction } = useTransactions();
   const { colors } = useAppTheme();
+  const { t, language } = useTranslation();
   const styles = createStyles(colors);
 
   const isIncome = transaction.type === 'income';
+  const isDebt = transaction.type === 'debt';
   const typeColor = isIncome ? colors.income : colors.expense;
   const gradientColors = isIncome ? colors.gradients.income : colors.gradients.expense;
 
   const handleDelete = () => {
-    Alert.alert('Delete Transaction', 'This action cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('transaction.deleteTitle'), t('transaction.deleteMessage'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await deleteTransaction(transaction.id);
@@ -51,7 +54,7 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color="#FFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Transaction Detail</Text>
+        <Text style={styles.headerTitle}>{t('transaction.title')}</Text>
         <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn}>
           <Ionicons name="trash-outline" size={22} color="#FFF" />
         </TouchableOpacity>
@@ -61,9 +64,11 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
       <View style={styles.amountSection}>
         <LinearGradient colors={gradientColors} style={styles.amountCard}>
           <Text style={styles.categoryIcon}>{transaction.categoryIcon || '📦'}</Text>
-          <Text style={styles.amountLabel}>{isIncome ? 'Income' : 'Expense'}</Text>
+          <Text style={styles.amountLabel}>
+            {isIncome ? t('common.income') : isDebt ? t('common.debt') : t('common.expense')}
+          </Text>
           <Text style={styles.amountValue}>
-            {isIncome ? '+' : '-'}{formatCurrency(transaction.amount)}
+            {isIncome ? '+' : '-'}{formatCurrency(transaction.amount, 'IDR', language)}
           </Text>
           <Text style={styles.categoryName}>{transaction.category}</Text>
         </LinearGradient>
@@ -71,25 +76,41 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.detailCard}>
-          <DetailRow label="Date" value={formatDate(transaction.date, 'EEEE, dd MMMM yyyy')} />
-          <DetailRow label="Time" value={formatTime(transaction.date)} />
-          <DetailRow label="Category" value={transaction.category} />
-          <DetailRow label="Type" value={transaction.type.toUpperCase()} valueColor={typeColor} />
+          <DetailRow label={t('common.date')} value={formatDate(transaction.date, 'EEEE, dd MMMM yyyy', language)} />
+          <DetailRow label={t('common.time')} value={formatTime(transaction.date, language)} />
+          <DetailRow label={t('common.category')} value={transaction.category} />
+          <DetailRow label={t('transaction.type')} value={t(`transaction.typeValue.${transaction.type}`)} valueColor={typeColor} />
           {transaction.createdByName ? (
-            <DetailRow label="Added By" value={transaction.createdByName} />
+            <DetailRow label={t('transaction.addedBy')} value={transaction.createdByName} />
+          ) : null}
+          {transaction.debtMeta?.creditorName ? (
+            <DetailRow label={t('transaction.creditorName')} value={transaction.debtMeta.creditorName} />
+          ) : null}
+          {transaction.debtMeta?.dueDate ? (
+            <DetailRow label={t('transaction.dueDate')} value={formatDate(transaction.debtMeta.dueDate, 'EEEE, dd MMMM yyyy', language)} />
+          ) : null}
+          {transaction.debtMeta?.remindDaysBefore ? (
+            <DetailRow
+              label={t('transaction.reminder')}
+              value={t('transaction.reminderValue', { count: transaction.debtMeta.remindDaysBefore })}
+            />
           ) : null}
           {transaction.description ? (
-            <DetailRow label="Description" value={transaction.description} />
+            <DetailRow label={t('common.description')} value={transaction.description} />
           ) : null}
-          <DetailRow label="Transaction ID" value={transaction.id.slice(0, 12) + '...'} />
+          <DetailRow label={t('transaction.id')} value={transaction.id.slice(0, 12) + '...'} />
         </View>
 
         {/* Quick Stats: last 3 same-category transactions */}
         <View style={styles.relatedSection}>
-          <Text style={styles.relatedTitle}>About this Category</Text>
+          <Text style={styles.relatedTitle}>{t('transaction.aboutCategory')}</Text>
           <View style={[styles.relatedCard, { borderColor: typeColor }]}>
             <Text style={styles.relatedText}>
-              {`You've recorded a ${transaction.category} ${transaction.type} of ${formatCurrency(transaction.amount)}.`}
+              {t('transaction.categoryInfo', {
+                category: transaction.category,
+                type: transaction.type,
+                amount: formatCurrency(transaction.amount, 'IDR', language),
+              })}
             </Text>
           </View>
         </View>
@@ -102,42 +123,44 @@ const createStyles = (colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, 
   },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: '#FFF' },
+  headerTitle: { fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold, color: '#FFF' },
   deleteBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  amountSection: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg, marginTop: -1 },
+  amountSection: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg, marginTop: 20 },
   amountCard: {
     borderRadius: BORDER_RADIUS.xl, padding: SPACING.xl,
     alignItems: 'center', ...SHADOWS.lg,
   },
   categoryIcon: { fontSize: 48, marginBottom: SPACING.sm },
-  amountLabel: { color: 'rgba(255,255,255,0.75)', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
-  amountValue: { color: '#FFF', fontSize: 42, fontWeight: FONT_WEIGHT.extrabold, letterSpacing: -1, marginVertical: 8 },
-  categoryName: { color: 'rgba(255,255,255,0.9)', fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.semibold },
+  amountLabel: { color: 'rgba(255,255,255,0.75)', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
+  amountValue: { color: '#FFF', fontSize: 42, fontFamily: FONT_FAMILY.extrabold, letterSpacing: -1, marginVertical: 8 },
+  categoryName: { color: 'rgba(255,255,255,0.9)', fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.semibold, fontFamily: FONT_FAMILY.semibold },
   content: { flex: 1, padding: SPACING.lg },
   detailCard: {
     backgroundColor: colors.surface, borderRadius: BORDER_RADIUS.xl,
     borderWidth: 1, borderColor: colors.border, overflow: 'hidden', ...SHADOWS.sm,
     marginBottom: SPACING.lg,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.regular
   },
   detailRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
     padding: SPACING.md, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  detailLabel: { color: colors.textMuted, fontSize: FONT_SIZE.sm, flex: 1 },
+  detailLabel: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, flex: 1 },
   detailValue: {
     color: colors.textPrimary, fontSize: FONT_SIZE.sm,
-    fontWeight: FONT_WEIGHT.semibold, flex: 2, textAlign: 'right',
+    fontWeight: FONT_WEIGHT.semibold, fontFamily: FONT_FAMILY.semibold, flex: 2, textAlign: 'right',
   },
   relatedSection: { marginBottom: SPACING.xxl },
-  relatedTitle: { color: colors.textSecondary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.semibold, marginBottom: SPACING.sm },
+  relatedTitle: { color: colors.textSecondary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.semibold, fontFamily: FONT_FAMILY.semibold, marginBottom: SPACING.sm },
   relatedCard: {
     backgroundColor: colors.surface, borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md, borderWidth: 1,
   },
-  relatedText: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, lineHeight: 22 },
+  relatedText: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, lineHeight: 22 },
 });
 
 export default TransactionDetailScreen;

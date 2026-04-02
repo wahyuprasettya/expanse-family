@@ -4,7 +4,7 @@
 import React from 'react';
 import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SHADOWS } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SHADOWS, FONT_FAMILY } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
 
 const SIZES = {
@@ -101,6 +101,7 @@ const createStyles = () => StyleSheet.create({
   },
   text: {
     fontWeight: FONT_WEIGHT.semibold,
+    fontFamily: FONT_FAMILY.semibold,
     textAlign: 'center',
   },
   icon: {

@@ -13,11 +13,14 @@ import { setUser } from '@store/authSlice';
 import Input from '@components/common/Input';
 import Button from '@components/common/Button';
 import { useTranslation } from '@hooks/useTranslation';
-import { Colors, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING } from '@constants/theme';
+import { useAppTheme } from '@hooks/useAppTheme';
 
 export const RegisterScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
   const [form, setForm] = useState({ displayName: '', email: '', password: '', confirmPassword: '' });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -53,7 +56,7 @@ export const RegisterScreen = ({ navigation }) => {
   };
 
   return (
-    <LinearGradient colors={['#0F172A', '#1E293B']} style={styles.container}>
+    <LinearGradient colors={colors.gradients.header} style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
@@ -130,29 +133,29 @@ export const RegisterScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
   scroll: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingTop: 60 },
   header: { marginBottom: SPACING.xl },
   backBtn: { marginBottom: SPACING.lg },
-  backText: { color: Colors.primary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.medium },
-  title: { fontSize: FONT_SIZE.xxxl, fontWeight: FONT_WEIGHT.extrabold, color: Colors.textPrimary },
-  subtitle: { color: Colors.textSecondary, fontSize: FONT_SIZE.md, marginTop: 4 },
+  backText: { color: colors.primary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
+  title: { fontSize: FONT_SIZE.xxxl, fontWeight: FONT_WEIGHT.extrabold, fontFamily: FONT_FAMILY.extrabold, color: colors.textPrimary },
+  subtitle: { color: colors.textSecondary, fontSize: FONT_SIZE.md, marginTop: 4, fontFamily: FONT_FAMILY.regular },
   form: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginBottom: SPACING.xl,
   },
   termsContainer: { marginBottom: SPACING.md },
-  termsText: { color: Colors.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20 },
-  termsLink: { color: Colors.primary, fontWeight: FONT_WEIGHT.medium },
+  termsText: { color: colors.textMuted, fontSize: FONT_SIZE.sm, lineHeight: 20, fontFamily: FONT_FAMILY.regular },
+  termsLink: { color: colors.primary, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   loginWrapper: { flexDirection: 'row', justifyContent: 'center', marginTop: SPACING.md },
-  loginPrompt: { color: Colors.textSecondary, fontSize: FONT_SIZE.md },
-  loginLink: { color: Colors.primary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.semibold },
+  loginPrompt: { color: colors.textSecondary, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.regular },
+  loginLink: { color: colors.primary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.semibold, fontFamily: FONT_FAMILY.semibold },
 });
 
 export default RegisterScreen;

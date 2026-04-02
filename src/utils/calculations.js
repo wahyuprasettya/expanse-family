@@ -8,7 +8,7 @@
 export const calculateBalance = (transactions = []) =>
   transactions.reduce((acc, t) => {
     if (t.type === 'income') return acc + t.amount;
-    if (t.type === 'expense') return acc - t.amount;
+    if (t.type === 'expense' || t.type === 'debt') return acc - t.amount;
     return acc;
   }, 0);
 
@@ -114,7 +114,9 @@ export const buildMonthlyBarData = (transactions = [], months = 6) => {
     result.push({
       label,
       income: sumByType(monthTxs, 'income'),
-      expense: sumByType(monthTxs, 'expense'),
+      expense: monthTxs
+        .filter((t) => t.type === 'expense' || t.type === 'debt')
+        .reduce((sum, transaction) => sum + transaction.amount, 0),
     });
   }
   return result;

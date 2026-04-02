@@ -3,7 +3,7 @@
 // ============================================================
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING, SHADOWS } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { formatCurrency, formatPercentage } from '@utils/formatters';
 import { useAppTheme } from '@hooks/useAppTheme';
 
@@ -91,11 +91,12 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.textPrimary,
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.semibold,
+    fontFamily: FONT_FAMILY.semibold,
   },
-  period: { color: colors.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
+  period: { color: colors.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2, fontFamily: FONT_FAMILY.regular },
   amounts: { alignItems: 'flex-end' },
-  spentText: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold },
-  limitText: { color: colors.textMuted, fontSize: FONT_SIZE.sm },
+  spentText: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
+  limitText: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
   progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -116,6 +117,7 @@ const createStyles = (colors) => StyleSheet.create({
   percentageText: {
     fontSize: FONT_SIZE.sm,
     fontWeight: FONT_WEIGHT.bold,
+    fontFamily: FONT_FAMILY.bold,
     width: 40,
     textAlign: 'right',
   },
@@ -124,10 +126,11 @@ const createStyles = (colors) => StyleSheet.create({
     padding: SPACING.sm,
     marginTop: 4,
   },
-  statusText: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.medium },
+  statusText: { fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   remainingText: {
     color: colors.textMuted,
     fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.regular,
     marginTop: 4,
   },
 });

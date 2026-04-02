@@ -3,15 +3,18 @@
 // ============================================================
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useTranslation } from '@hooks/useTranslation';
 import { subscribeToTransactions, addTransaction as addTxService, deleteTransaction as deleteTxService } from '@services/firebase/transactions';
 import { setTransactions, addTransactionLocal, removeTransactionLocal, selectTransactions, selectBalance, selectFilteredTransactions } from '@store/transactionSlice';
 import { selectProfile, selectUser } from '@store/authSlice';
 import { updateBudgetSpent } from '@services/firebase/budgets';
-import { sendTransactionNotification, sendBudgetWarningNotification } from '@services/firebase/notifications';
+import { sendTransactionNotification, sendBudgetWarningNotification, sendHouseholdNotification } from '@services/firebase/notifications';
 import { selectBudgets } from '@store/budgetSlice';
+import { deleteRemindersByTransactionId, syncDebtReminder } from '@services/firebase/reminders';
 
 export const useTransactions = () => {
   const dispatch = useDispatch();
+  const { t, language } = useTranslation();
   const user = useSelector(selectUser);
   const profile = useSelector(selectProfile);
   const transactions = useSelector(selectTransactions);
@@ -42,13 +45,57 @@ export const useTransactions = () => {
       householdId: accountId,
       createdByUid: user.uid,
       createdByName: user.displayName || user.email || 'Member',
-      date: new Date(data.date),
+      date: new Date(data.date).toISOString(),
     };
+    console.log('New transaction added:', newTx);
     dispatch(addTransactionLocal(newTx));
+
+    
+
+    if (data.type === 'debt' && data.debtMeta?.dueDate) {
+      await syncDebtReminder({
+        transactionId: id,
+        userId: user.uid,
+        creditorName: data.debtMeta.creditorName,
+        category: data.category,
+        amount: data.amount,
+        dueDate: data.debtMeta.dueDate,
+        remindDaysBefore: data.debtMeta.remindDaysBefore ?? 3,
+      }, t);
+    }
 
     // Send push notification for expense
     if (data.type === 'expense') {
-      await sendTransactionNotification(newTx);
+      await sendTransactionNotification({
+        ...newTx,
+        title: `${data.categoryIcon || '💸'} ${t('transactionNotification.expenseTitle')}`,
+        body: t('transactionNotification.transactionBody', {
+          category: data.category,
+          amount: formatCurrency(data.amount, language),
+        }),
+      });
+
+      // Send notification to other household members
+      if (profile?.householdId && profile.householdId !== user.uid) {
+        await sendHouseholdNotification(
+          profile.householdId,
+          user.uid,
+          {
+            title: t('transactionNotification.householdAddedTitle', {
+              name: user.displayName || t('profile.fallbackUser'),
+            }),
+            body: t('transactionNotification.householdAddedBody', {
+              category: data.category,
+              amount: formatCurrency(data.amount, language),
+            }),
+            data: {
+              transactionId: id,
+              type: 'household_transaction',
+              action: 'added'
+            },
+          }
+        );
+      }
 
       // Check budget and warn if needed
       const now = new Date();
@@ -63,7 +110,15 @@ export const useTransactions = () => {
       if (budget && budget.amount > 0) {
         const newSpent = (budget.spent || 0) + data.amount;
         if (newSpent / budget.amount >= 0.8) {
-          await sendBudgetWarningNotification(data.category, newSpent, budget.amount);
+          await sendBudgetWarningNotification({
+            title: t('transactionNotification.budgetWarningTitle', { category: data.category }),
+            body: t('transactionNotification.budgetWarningBody', {
+              category: data.category,
+              percent: Math.round((newSpent / budget.amount) * 100),
+              amount: formatCurrency(budget.amount - newSpent, language),
+            }),
+            name: data.category,
+          });
         }
       }
     }
@@ -72,10 +127,41 @@ export const useTransactions = () => {
   };
 
   const deleteTransaction = async (txId) => {
+    // Get transaction details before deletion for notification
+    const transactionToDelete = transactions.find(tx => tx.id === txId);
+
     const { error } = await deleteTxService(txId);
-    if (!error) dispatch(removeTransactionLocal(txId));
+    if (!error) {
+      await deleteRemindersByTransactionId(txId);
+      dispatch(removeTransactionLocal(txId));
+
+      // Send notification to household members when transaction is deleted
+      if (transactionToDelete && profile?.householdId && profile.householdId !== user.uid) {
+        await sendHouseholdNotification(
+          profile.householdId,
+          user.uid,
+          {
+            title: t('transactionNotification.householdDeletedTitle', {
+              name: user.displayName || t('profile.fallbackUser'),
+            }),
+            body: t('transactionNotification.householdDeletedBody', {
+              category: transactionToDelete.category,
+              amount: formatCurrency(transactionToDelete.amount, language),
+            }),
+            data: {
+              transactionId: txId,
+              type: 'household_transaction',
+              action: 'deleted'
+            },
+          }
+        );
+      }
+    }
     return { error };
   };
 
   return { transactions, filteredTransactions, balance, addTransaction, deleteTransaction };
 };
+
+const formatCurrency = (amount, language) =>
+  new Intl.NumberFormat(language === 'en' ? 'en-US' : 'id-ID', { style: 'currency', currency: 'IDR' }).format(amount);

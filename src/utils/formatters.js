@@ -17,11 +17,31 @@ export const formatCurrency = (amount, currency = 'IDR', language = 'id') => {
   }).format(Math.abs(amount));
 };
 
+export const formatCurrencyFull = (amount, currency = 'IDR', language = 'id') => {
+  // Format lengkap dengan separator ribuan tapi tanpa singkatan
+  const formatted = new Intl.NumberFormat(getIntlLocale(language), {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.abs(amount));
+
+  return `${currency === 'IDR' ? 'Rp' : '$'} ${formatted}`;
+};
+
 export const formatCurrencyCompact = (amount, currency = 'IDR', language = 'id') => {
-  if (Math.abs(amount) >= 1_000_000_000) return `Rp ${(amount / 1_000_000_000).toFixed(1)}B`;
-  if (Math.abs(amount) >= 1_000_000) return `Rp ${(amount / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(amount) >= 1_000) return `Rp ${(amount / 1_000).toFixed(0)}K`;
-  return formatCurrency(amount, currency, language);
+  const absAmount = Math.abs(amount);
+  const prefix = currency === 'IDR' ? 'Rp' : '$';
+  
+  if (language === 'id') {
+    if (absAmount >= 1_000_000_000) return `${prefix} ${(amount / 1_000_000_000).toFixed(1)}M`;
+    if (absAmount >= 1_000_000) return `${prefix} ${(amount / 1_000_000).toFixed(1)}JT`;
+    if (absAmount >= 1_000) return `${prefix} ${(amount / 1_000).toFixed(0)}RB`;
+    return formatCurrency(amount, currency, language);
+  } else {
+    if (absAmount >= 1_000_000_000) return `${prefix} ${(amount / 1_000_000_000).toFixed(1)}B`;
+    if (absAmount >= 1_000_000) return `${prefix} ${(amount / 1_000_000).toFixed(1)}M`;
+    if (absAmount >= 1_000) return `${prefix} ${(amount / 1_000).toFixed(0)}K`;
+    return formatCurrency(amount, currency, language);
+  }
 };
 
 // ─── Date ─────────────────────────────────────────────────────

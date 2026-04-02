@@ -7,16 +7,21 @@ import { useSelector } from 'react-redux';
 import { selectTransactions } from '@store/transactionSlice';
 import { buildMonthlyBarData } from '@utils/calculations';
 import { formatCurrencyCompact } from '@utils/formatters';
-import { Colors, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING } from '@constants/theme';
+import { useAppTheme } from '@hooks/useAppTheme';
+import { useTranslation } from '@hooks/useTranslation';
 
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - SPACING.lg * 4;
-const BAR_COLOR_INCOME = Colors.income;
-const BAR_COLOR_EXPENSE = Colors.expense;
 
 export const MonthlyBarChart = ({ monthsToShow = 5 }) => {
   const transactions = useSelector(selectTransactions);
+  const { colors } = useAppTheme();
+  const { t, language } = useTranslation();
+  const styles = createStyles(colors);
   const data = useMemo(() => buildMonthlyBarData(transactions, monthsToShow), [transactions, monthsToShow]);
+  const BAR_COLOR_INCOME = colors.income;
+  const BAR_COLOR_EXPENSE = colors.expense;
 
   const maxValue = Math.max(...data.map((d) => Math.max(d.income, d.expense)), 1);
   const barWidth = Math.floor((CHART_WIDTH / monthsToShow - 16) / 2);
@@ -69,24 +74,24 @@ export const MonthlyBarChart = ({ monthsToShow = 5 }) => {
       <View style={styles.legend}>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: BAR_COLOR_INCOME }]} />
-          <Text style={styles.legendText}>Income</Text>
+          <Text style={styles.legendText}>{t('common.income')}</Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: BAR_COLOR_EXPENSE }]} />
-          <Text style={styles.legendText}>Expense</Text>
+          <Text style={styles.legendText}>{t('common.expense')}</Text>
         </View>
       </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   chartArea: {
     flexDirection: 'row',
@@ -109,12 +114,13 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.sm,
     marginTop: 4,
   },
-  barLabel: { fontSize: 8, fontWeight: FONT_WEIGHT.bold, marginBottom: 2 },
+  barLabel: { fontSize: 8, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, marginBottom: 2 },
   monthLabel: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontSize: FONT_SIZE.xs,
     marginTop: 6,
     fontWeight: FONT_WEIGHT.medium,
+    fontFamily: FONT_FAMILY.medium,
   },
   legend: {
     flexDirection: 'row',
@@ -123,11 +129,11 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     paddingTop: SPACING.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendText: { color: Colors.textSecondary, fontSize: FONT_SIZE.xs },
+  legendText: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
 });
 
 export default MonthlyBarChart;

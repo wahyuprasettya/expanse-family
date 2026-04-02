@@ -3,18 +3,19 @@
 // ============================================================
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT } from '@constants/theme';
-
-const VARIANTS = {
-  income:  { bg: `${Colors.income}20`,   text: Colors.income },
-  expense: { bg: `${Colors.expense}20`,  text: Colors.expense },
-  warning: { bg: `${Colors.warning}20`,  text: Colors.warning },
-  primary: { bg: `${Colors.primary}20`,  text: Colors.primary },
-  muted:   { bg: Colors.surfaceVariant,  text: Colors.textMuted },
-};
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY } from '@constants/theme';
+import { useAppTheme } from '@hooks/useAppTheme';
 
 export const Badge = ({ label, variant = 'primary', style }) => {
-  const v = VARIANTS[variant] || VARIANTS.primary;
+  const { colors } = useAppTheme();
+  const variants = {
+    income: { bg: `${colors.income}20`, text: colors.income },
+    expense: { bg: `${colors.expense}20`, text: colors.expense },
+    warning: { bg: `${colors.warning}20`, text: colors.warning },
+    primary: { bg: `${colors.primary}20`, text: colors.primary },
+    muted: { bg: colors.surfaceVariant, text: colors.textMuted },
+  };
+  const v = variants[variant] || variants.primary;
   return (
     <View style={[styles.badge, { backgroundColor: v.bg }, style]}>
       <Text style={[styles.text, { color: v.text }]}>{label}</Text>
@@ -32,6 +33,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: FONT_SIZE.xs,
     fontWeight: FONT_WEIGHT.semibold,
+    fontFamily: FONT_FAMILY.semibold,
   },
 });
 

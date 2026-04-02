@@ -6,7 +6,6 @@ import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/
 import { useSelector } from 'react-redux';
 import { View, ActivityIndicator } from 'react-native';
 import { selectIsAuthenticated, selectIsPinVerified, selectProfile } from '@store/authSlice';
-import { selectTheme } from '@store/uiSlice';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
 import PinScreen from '@screens/auth/PinScreen';
@@ -18,13 +17,12 @@ export const AppNavigator = () => {
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const isPinVerified = useSelector(selectIsPinVerified);
   const profile = useSelector(selectProfile);
-  const theme = useSelector(selectTheme);
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
 
   const navigationTheme = {
-    ...(theme === 'dark' ? DarkTheme : DefaultTheme),
+    ...(isDark ? DarkTheme : DefaultTheme),
     colors: {
-      ...(theme === 'dark' ? DarkTheme.colors : DefaultTheme.colors),
+      ...(isDark ? DarkTheme.colors : DefaultTheme.colors),
       background: colors.background,
       card: colors.surface,
       text: colors.textPrimary,

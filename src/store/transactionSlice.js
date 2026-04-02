@@ -27,7 +27,7 @@ const transactionSlice = createSlice({
         .filter((t) => t.type === 'income')
         .reduce((s, t) => s + t.amount, 0);
       state.totalExpense = action.payload
-        .filter((t) => t.type === 'expense')
+        .filter((t) => t.type === 'expense' || t.type === 'debt')
         .reduce((s, t) => s + t.amount, 0);
     },
     addTransactionLocal: (state, action) => {

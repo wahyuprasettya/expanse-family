@@ -6,7 +6,7 @@ import { createSlice } from '@reduxjs/toolkit';
 const uiSlice = createSlice({
   name: 'ui',
   initialState: {
-    theme: 'dark',
+    theme: 'system',
     language: 'id',
     isAddTransactionModalOpen: false,
     activeTab: 'home',
@@ -31,6 +31,7 @@ export const {
 } = uiSlice.actions;
 
 export const selectTheme = (state) => state.ui.theme;
+export const selectThemeMode = (state) => state.ui.theme;
 export const selectLanguage = (state) => state.ui.language;
 export const selectIsAddTransactionModalOpen = (state) => state.ui.isAddTransactionModalOpen;
 

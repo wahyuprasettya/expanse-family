@@ -13,11 +13,14 @@ import { setUser } from '@store/authSlice';
 import Input from '@components/common/Input';
 import Button from '@components/common/Button';
 import { useTranslation } from '@hooks/useTranslation';
-import { Colors, BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING } from '@constants/theme';
+import { useAppTheme } from '@hooks/useAppTheme';
 
 export const LoginScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { t } = useTranslation();
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,7 +49,7 @@ export const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <LinearGradient colors={['#0F172A', '#1E293B']} style={styles.container}>
+    <LinearGradient colors={colors.gradients.header} style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Header */}
@@ -117,7 +120,7 @@ export const LoginScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
   scroll: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingTop: 60 },
@@ -125,53 +128,56 @@ const styles = StyleSheet.create({
   logoContainer: {
     width: 80, height: 80,
     borderRadius: BORDER_RADIUS.xl,
-    backgroundColor: `${Colors.primary}30`,
+    backgroundColor: `${colors.primary}30`,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: `${Colors.primary}50`,
+    borderColor: `${colors.primary}50`,
   },
   logoEmoji: { fontSize: 40 },
   title: {
     fontSize: FONT_SIZE.xxxl,
     fontWeight: FONT_WEIGHT.extrabold,
-    color: Colors.textPrimary,
+    fontFamily: FONT_FAMILY.extrabold,
+    color: colors.textPrimary,
     letterSpacing: -0.5,
   },
-  subtitle: { color: Colors.textSecondary, fontSize: FONT_SIZE.md, marginTop: 4 },
+  subtitle: { color: colors.textSecondary, fontSize: FONT_SIZE.md, marginTop: 4, fontFamily: FONT_FAMILY.regular },
   form: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginBottom: SPACING.xl,
   },
   welcomeTitle: {
     fontSize: FONT_SIZE.xxl,
     fontWeight: FONT_WEIGHT.bold,
-    color: Colors.textPrimary,
+    fontFamily: FONT_FAMILY.bold,
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   welcomeSubtitle: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontSize: FONT_SIZE.md,
+    fontFamily: FONT_FAMILY.regular,
     marginBottom: SPACING.lg,
   },
   forgotWrapper: { alignSelf: 'flex-end', marginTop: -SPACING.sm, marginBottom: SPACING.lg },
-  forgotText: { color: Colors.primary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
+  forgotText: { color: colors.primary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   loginBtn: { marginTop: SPACING.sm },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
     marginVertical: SPACING.lg,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { color: Colors.textMuted, paddingHorizontal: SPACING.md, fontSize: FONT_SIZE.sm },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { color: colors.textMuted, paddingHorizontal: SPACING.md, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
   registerWrapper: { flexDirection: 'row', justifyContent: 'center' },
-  registerPrompt: { color: Colors.textSecondary, fontSize: FONT_SIZE.md },
-  registerLink: { color: Colors.primary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.semibold },
+  registerPrompt: { color: colors.textSecondary, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.regular },
+  registerLink: { color: colors.primary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.semibold, fontFamily: FONT_FAMILY.semibold },
 });
 
 export default LoginScreen;

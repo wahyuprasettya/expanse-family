@@ -113,6 +113,8 @@ Recurring bill reminders and their notification schedules.
   "isRecurring":    "boolean",
   "daysBefore":     "number (how many days before to notify, default: 1)",
   "isActive":       "boolean",
+  "reminderType":   "string ('bill' | 'debt')",
+  "linkedTransactionId": "string | null",
   "notificationId": "string | null (Expo scheduled notification ID)",
   "createdAt":      "Timestamp",
   "updatedAt":      "Timestamp | null"
@@ -150,6 +152,33 @@ Custom user-defined categories (default categories are stored locally).
 
 ---
 
+### 6. `assets/{assetId}`
+
+User asset portfolio entries such as gold, cash, property, and vehicles.
+
+```json
+{
+  "userId":        "string",
+  "name":          "string",
+  "type":          "string ('gold' | 'cash' | 'property' | 'vehicle' | 'crypto' | 'other')",
+  "unit":          "string (e.g. 'gram', 'pcs')",
+  "quantity":      "number",
+  "buyPrice":      "number",
+  "currentPrice":  "number",
+  "notes":         "string | null",
+  "createdAt":     "Timestamp",
+  "updatedAt":     "Timestamp"
+}
+```
+
+**Composite Indexes required:**
+
+| Fields | Order | Purpose |
+|---|---|---|
+| `userId` + `createdAt` | DESC | Asset portfolio sorting |
+
+---
+
 ## Relationships Diagram
 
 ```
@@ -159,6 +188,7 @@ users/{uid}
     ├── budgets/{budgetId}             ← userId field
     ├── reminders/{reminderId}         ← userId field
     └── categories/{categoryId}        ← userId field
+    └── assets/{assetId}               ← userId field
 ```
 
 > All collections are **top-level** (not subcollections) for easier querying with

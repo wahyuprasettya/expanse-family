@@ -28,12 +28,12 @@ export const useAuth = () => {
         const mergedProfile = updates ? { ...profile, ...updates } : profile;
 
         dispatch(setProfile(mergedProfile));
-        dispatch(setTheme(mergedProfile?.theme || 'dark'));
+        dispatch(setTheme(mergedProfile?.theme || 'system'));
         // Register push notifications
         await registerForPushNotifications(firebaseUser.uid);
       } else {
         dispatch(setProfile(null));
-        dispatch(setTheme('dark'));
+        dispatch(setTheme('system'));
       }
     });
 

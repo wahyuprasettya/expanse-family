@@ -3,9 +3,10 @@
 // ============================================================
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from './config';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -60,18 +61,27 @@ export const registerForPushNotifications = async (userId) => {
   }
 
   // Get Expo push token
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ||
+    Constants.easConfig?.projectId;
+
+  if (!projectId) {
+    console.warn('Expo projectId is missing; cannot fetch Expo push token');
+    return null;
+  }
+
   const tokenData = await Notifications.getExpoPushTokenAsync({
-    projectId: 'your-expo-project-id', // Replace with your Expo project ID
+    projectId,
   });
 
   const token = tokenData.data;
 
   // Save token to Firestore
   if (userId && token) {
-    await updateDoc(doc(db, 'users', userId), {
+    await setDoc(doc(db, 'users', userId), {
       expoPushToken: token,
       tokenUpdatedAt: new Date(),
-    });
+    }, { merge: true });
   }
 
   return token;
@@ -79,13 +89,10 @@ export const registerForPushNotifications = async (userId) => {
 
 // ─── Send Local Notification ─────────────────────────────────
 export const sendTransactionNotification = async (transaction) => {
-  const icon = transaction.type === 'income' ? '💰' : '💸';
-  const typeLabel = transaction.type === 'income' ? 'Income' : 'Expense';
-
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: `${icon} New ${typeLabel} Added`,
-      body: `${transaction.category}: ${formatCurrency(transaction.amount)}`,
+      title: transaction.title,
+      body: transaction.body,
       data: { transactionId: transaction.id, type: 'transaction' },
       sound: 'default',
     },
@@ -94,23 +101,77 @@ export const sendTransactionNotification = async (transaction) => {
 };
 
 // ─── Send Budget Warning Notification ────────────────────────
-export const sendBudgetWarningNotification = async (category, spent, budget) => {
-  const percentage = Math.round((spent / budget) * 100);
+export const sendBudgetWarningNotification = async (category) => {
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: `⚠️ Budget Warning: ${category}`,
-      body: `You've used ${percentage}% of your ${category} budget. Be careful!`,
-      data: { type: 'budget_warning', category },
+      title: category.title,
+      body: category.body,
+      data: { type: 'budget_warning', category: category.name },
       sound: 'default',
     },
     trigger: null,
   });
 };
 
-// ─── Cancel All Notifications ────────────────────────────────
-export const cancelAllNotifications = async () => {
-  await Notifications.cancelAllScheduledNotificationsAsync();
+// ─── Get Household Members ──────────────────────────────────
+export const getHouseholdMembers = async (householdId) => {
+  try {
+    const q = query(
+      collection(db, 'users'),
+      where('householdId', '==', householdId)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+      uid: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error('Error getting household members:', error);
+    return [];
+  }
 };
 
-const formatCurrency = (amount) =>
-  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount);
+// ─── Send Push Notification to Household Members ────────────
+export const sendHouseholdNotification = async (householdId, senderUid, notification) => {
+  try {
+    const members = await getHouseholdMembers(householdId);
+
+    // Filter out the sender (don't send notification to themselves)
+    const recipients = members.filter(member => member.uid !== senderUid && member.expoPushToken);
+
+    if (recipients.length === 0) {
+      console.log('No recipients found for household notification');
+      return;
+    }
+
+    // Send push notifications to all recipients via Expo
+    const messages = recipients.map(member => ({
+      to: member.expoPushToken,
+      title: notification.title,
+      body: notification.body,
+      data: notification.data || {},
+      sound: 'default',
+      priority: 'default',
+    }));
+
+    // Send to Expo push notification service
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(messages),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('Failed to send push notifications:', errorData);
+    } else {
+      const result = await response.json();
+      console.log('Push notifications sent successfully:', result);
+    }
+
+  } catch (error) {
+    console.error('Error sending household notification:', error);
+  }
+};

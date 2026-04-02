@@ -11,11 +11,13 @@ import { useSelector } from 'react-redux';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { selectUser } from '@store/authSlice';
 import { selectBalance, selectTotalIncome, selectTotalExpense, selectTransactions } from '@store/transactionSlice';
+import { selectCategories } from '@store/categorySlice';
 import { selectUpcomingReminders } from '@store/reminderSlice';
 import { selectBudgetWarnings } from '@store/budgetSlice';
-import { formatCurrencyCompact, formatCurrency, formatDateSmart } from '@utils/formatters';
+import { selectUnreadAppNotificationCount } from '@store/appNotificationSlice';
+import { formatCurrency, formatCurrencyFull, formatDateSmart } from '@utils/formatters';
 import TransactionCard from '@components/transaction/TransactionCard';
-import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING, SHADOWS } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { useInsights } from '@hooks/useInsights';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
@@ -29,11 +31,33 @@ export const HomeScreen = ({ navigation }) => {
   const totalIncome = useSelector(selectTotalIncome);
   const totalExpense = useSelector(selectTotalExpense);
   const transactions = useSelector(selectTransactions);
+  const categories = useSelector(selectCategories);
   const upcomingReminders = useSelector(selectUpcomingReminders);
   const budgetWarnings = useSelector(selectBudgetWarnings);
+  const unreadNotifications = useSelector(selectUnreadAppNotificationCount);
   const insights = useInsights();
+  const getCategoryDisplayName = (category) => {
+    if (category?.isDefault && category?.id) {
+      const translatedName = t(`categories.names.${category.id}`);
+      return translatedName !== `categories.names.${category.id}` ? translatedName : category.name;
+    }
+    return category?.name || '';
+  };
 
-  const recentTransactions = useMemo(() => transactions.slice(0, 5), [transactions]);
+  const recentTransactions = useMemo(() => {
+    const categoryMap = new Map(categories.map((category) => [category.id, category]));
+
+    return transactions.slice(0, 5).map((transaction) => {
+      const category = categoryMap.get(transaction.categoryId);
+
+      return {
+        ...transaction,
+        category: getCategoryDisplayName(category) || transaction.category,
+        categoryIcon: transaction.categoryIcon || category?.icon,
+        categoryColor: transaction.categoryColor || category?.color,
+      };
+    });
+  }, [transactions, categories, t]);
   const firstName = user?.displayName?.split(' ')[0] || t('home.defaultName');
 
   const hour = new Date().getHours();
@@ -49,9 +73,19 @@ export const HomeScreen = ({ navigation }) => {
               <Text style={styles.greeting}>{greeting}, {firstName} 👋</Text>
               <Text style={styles.headerSubtitle}>{t('home.financialSummary')}</Text>
             </View>
-            <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.avatar}>
-              <Text style={styles.avatarText}>{firstName[0]?.toUpperCase()}</Text>
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={() => navigation.navigate('Notifications')} style={styles.bellBtn}>
+                <Ionicons name="notifications-outline" size={22} color={colors.warning} />
+                {unreadNotifications > 0 ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{unreadNotifications}</Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.avatar}>
+                <Ionicons name="person" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Balance Card */}
@@ -62,7 +96,7 @@ export const HomeScreen = ({ navigation }) => {
             style={styles.balanceCard}
           >
             <Text style={styles.balanceLabel}>{t('home.totalBalance')}</Text>
-            <Text style={styles.balanceAmount}>{formatCurrencyCompact(balance, 'IDR', language)}</Text>
+            <Text style={styles.balanceAmount}>{formatCurrencyFull(balance, 'IDR', language)}</Text>
 
             <View style={styles.balanceRow}>
               <View style={styles.balanceStat}>
@@ -72,7 +106,7 @@ export const HomeScreen = ({ navigation }) => {
                 <View>
                   <Text style={styles.statLabel}>{t('home.income')}</Text>
                   <Text style={[styles.statValue, { color: colors.income }]}>
-                    +{formatCurrencyCompact(totalIncome, 'IDR', language)}
+                    +{formatCurrencyFull(totalIncome, 'IDR', language)}
                   </Text>
                 </View>
               </View>
@@ -83,7 +117,7 @@ export const HomeScreen = ({ navigation }) => {
                 <View>
                   <Text style={styles.statLabel}>{t('home.expenses')}</Text>
                   <Text style={[styles.statValue, { color: colors.expense }]}>
-                    -{formatCurrencyCompact(totalExpense, 'IDR', language)}
+                    -{formatCurrencyFull(totalExpense, 'IDR', language)}
                   </Text>
                 </View>
               </View>
@@ -199,15 +233,18 @@ export const HomeScreen = ({ navigation }) => {
                 <Text style={styles.emptySubtext}>{t('home.addFirstTransaction')}</Text>
               </View>
             ) : (
-              recentTransactions.map((tx) => (
-                <TransactionCard
-                  key={tx.id}
-                  transaction={tx}
-                  onPress={(t) => navigation.navigate('TransactionDetail', { transaction: t })}
-                />
-              ))
+              <View style={styles.transactionsList}>
+                {recentTransactions.map((tx) => (
+                  <TransactionCard
+                    key={tx.id}
+                    transaction={tx}
+                    onPress={(t) => navigation.navigate('TransactionDetail', { transaction: t })}
+                  />
+                ))}
+              </View>
             )}
           </View>
+          <View style={{height:50}}></View>
         </View>
       </ScrollView>
 
@@ -236,24 +273,40 @@ const createStyles = (colors) => StyleSheet.create({
     paddingTop: SPACING.md,
     marginBottom: SPACING.lg,
   },
-  greeting: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: colors.textPrimary },
-  headerSubtitle: { color: colors.textMuted, fontSize: FONT_SIZE.sm, marginTop: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  greeting: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
+  headerSubtitle: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, marginTop: 2 },
+  bellBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: `${colors.warning}18`,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: `${colors.warning}35`,
+  },
+  badge: {
+    position: 'absolute', top: 1, right: 1,
+    minWidth: 16, height: 16, borderRadius: 8,
+    backgroundColor: colors.expense,
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
   avatar: {
     width: 44, height: 44,
     borderRadius: 22,
     backgroundColor: colors.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: { color: '#FFF', fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.lg },
   balanceCard: {
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,
     ...SHADOWS.lg,
   },
-  balanceLabel: { color: 'rgba(255,255,255,0.7)', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
+  balanceLabel: { color: 'rgba(255,255,255,0.7)', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   balanceAmount: {
     fontSize: FONT_SIZE.display,
-    fontWeight: FONT_WEIGHT.extrabold,
+    // fontWeight: FONT_WEIGHT.extrabold,
+    fontFamily: FONT_FAMILY.extrabold,
     color: '#FFFFFF',
     marginVertical: 8,
     letterSpacing: -1,
@@ -266,8 +319,8 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center', justifyContent: 'center',
   },
-  statLabel: { color: 'rgba(255,255,255,0.6)', fontSize: FONT_SIZE.xs },
-  statValue: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold },
+  statLabel: { color: 'rgba(255,255,255,0.6)', fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
+  statValue: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
   content: { padding: SPACING.lg },
   savingsCard: {
     backgroundColor: colors.surface,
@@ -279,12 +332,12 @@ const createStyles = (colors) => StyleSheet.create({
     marginBottom: SPACING.md,
     borderWidth: 1, borderColor: colors.border,
   },
-  savingsLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm },
-  savingsValue: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold },
+  savingsLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
+  savingsValue: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
   section: { marginBottom: SPACING.lg },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
-  sectionTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.semibold },
-  seeAll: { color: colors.primary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
+  sectionTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.semibold, fontFamily: FONT_FAMILY.semibold },
+  seeAll: { color: colors.primary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   alertCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -296,8 +349,8 @@ const createStyles = (colors) => StyleSheet.create({
   },
   alertIcon: { fontSize: 24, marginRight: SPACING.sm },
   alertInfo: { flex: 1 },
-  alertTitle: { color: colors.textPrimary, fontWeight: FONT_WEIGHT.medium },
-  alertSubtitle: { color: colors.textMuted, fontSize: FONT_SIZE.xs },
+  alertTitle: { color: colors.textPrimary, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
+  alertSubtitle: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
   reminderCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -308,9 +361,9 @@ const createStyles = (colors) => StyleSheet.create({
     marginBottom: SPACING.sm,
     borderWidth: 1, borderColor: colors.border,
   },
-  reminderName: { color: colors.textPrimary, fontWeight: FONT_WEIGHT.medium, flex: 1 },
-  reminderDate: { color: colors.textMuted, fontSize: FONT_SIZE.xs },
-  reminderAmount: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, marginLeft: 8 },
+  reminderName: { color: colors.textPrimary, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium, flex: 1 },
+  reminderDate: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
+  reminderAmount: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, marginLeft: 8 },
   insightCard: {
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.md,
@@ -318,11 +371,12 @@ const createStyles = (colors) => StyleSheet.create({
     marginBottom: SPACING.sm,
     borderWidth: 1, borderColor: colors.border,
   },
-  insightText: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, lineHeight: 20 },
+  insightText: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, lineHeight: 20 },
+  transactionsList: { width: '100%' },
   emptyState: { alignItems: 'center', paddingVertical: SPACING.xxl },
   emptyIcon: { fontSize: 48, marginBottom: SPACING.md },
-  emptyText: { color: colors.textPrimary, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.semibold },
-  emptySubtext: { color: colors.textMuted, fontSize: FONT_SIZE.sm, marginTop: 4 },
+  emptyText: { color: colors.textPrimary, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.semibold, fontFamily: FONT_FAMILY.semibold },
+  emptySubtext: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, marginTop: 4 },
   fab: {
     position: 'absolute',
     bottom: 90,

@@ -1,30 +1,74 @@
 // ============================================================
-// Redux Store Configuration
+// Redux Store Configuration with Persistence
 // ============================================================
 import { configureStore } from '@reduxjs/toolkit';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persistStore, persistReducer, FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER } from 'redux-persist';
 import authReducer from './authSlice';
 import transactionReducer from './transactionSlice';
 import budgetReducer from './budgetSlice';
 import categoryReducer from './categorySlice';
+import assetReducer from './assetSlice';
 import reminderReducer from './reminderSlice';
+import appNotificationReducer from './appNotificationSlice';
 import uiReducer from './uiSlice';
+
+// Persist configuration for transactions
+const transactionPersistConfig = {
+  key: 'transactions',
+  storage: AsyncStorage,
+  whitelist: ['items', 'balance', 'totalIncome', 'totalExpense'], // Only persist these fields
+};
+
+// Persist configuration for budgets
+const budgetPersistConfig = {
+  key: 'budgets',
+  storage: AsyncStorage,
+  whitelist: ['items'],
+};
+
+const assetPersistConfig = {
+  key: 'assets',
+  storage: AsyncStorage,
+  whitelist: ['items'],
+};
+
+// Persist configuration for UI preferences
+const uiPersistConfig = {
+  key: 'ui',
+  storage: AsyncStorage,
+  whitelist: ['language', 'theme'],
+};
+
+// Create persisted reducers
+const persistedTransactionReducer = persistReducer(transactionPersistConfig, transactionReducer);
+const persistedBudgetReducer = persistReducer(budgetPersistConfig, budgetReducer);
+const persistedAssetReducer = persistReducer(assetPersistConfig, assetReducer);
+const persistedUiReducer = persistReducer(uiPersistConfig, uiReducer);
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
-    transactions: transactionReducer,
-    budgets: budgetReducer,
+    transactions: persistedTransactionReducer,
+    budgets: persistedBudgetReducer,
     categories: categoryReducer,
+    assets: persistedAssetReducer,
     reminders: reminderReducer,
-    ui: uiReducer,
+    appNotifications: appNotificationReducer,
+    ui: persistedUiReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredActions: ['auth/setUser'],
+        ignoredActions: [
+          FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER,
+          'auth/setUser',
+        ],
         ignoredPaths: ['auth.user'],
       },
     }),
 });
+
+export const persistor = persistStore(store);
 
 export default store;

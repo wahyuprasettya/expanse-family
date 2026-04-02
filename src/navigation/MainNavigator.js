@@ -9,16 +9,18 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '@screens/main/HomeScreen';
 import TransactionsScreen from '@screens/main/TransactionsScreen';
 import ReportsScreen from '@screens/main/ReportsScreen';
+import AssetsScreen from '@screens/main/AssetsScreen';
 import BudgetScreen from '@screens/main/BudgetScreen';
 import ProfileScreen from '@screens/main/ProfileScreen';
 import AddTransactionScreen from '@screens/transaction/AddTransactionScreen';
 import TransactionDetailScreen from '@screens/transaction/TransactionDetailScreen';
 import RemindersScreen from '@screens/reminder/RemindersScreen';
-import ScanReceiptScreen from '@screens/receipt/ScanReceiptScreen';
 import CategoriesScreen from '@screens/category/CategoriesScreen';
 import PinScreen from '@screens/auth/PinScreen';
 import HouseholdScreen from '@screens/main/HouseholdScreen';
-import { BORDER_RADIUS } from '@constants/theme';
+import NotificationsScreen from '@screens/main/NotificationsScreen';
+import ChatScreen from '@screens/main/ChatScreen';
+import { BORDER_RADIUS, FONT_FAMILY } from '@constants/theme';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
 
@@ -30,6 +32,7 @@ const TAB_ICONS = {
   Home: { active: 'home', inactive: 'home-outline' },
   Transactions: { active: 'list', inactive: 'list-outline' },
   Reports: { active: 'stats-chart', inactive: 'stats-chart-outline' },
+  Assets: { active: 'diamond', inactive: 'diamond-outline' },
   Budget: { active: 'wallet', inactive: 'wallet-outline' },
   Profile: { active: 'person', inactive: 'person-outline' },
 };
@@ -66,6 +69,7 @@ const BottomTabs = () => {
       <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: t('nav.home') }} />
       <Tab.Screen name="Transactions" component={TransactionsScreen} options={{ tabBarLabel: t('nav.transactions') }} />
       <Tab.Screen name="Reports" component={ReportsScreen} options={{ tabBarLabel: t('nav.reports') }} />
+      <Tab.Screen name="Assets" component={AssetsScreen} options={{ tabBarLabel: t('nav.assets') }} />
       <Tab.Screen name="Budget" component={BudgetScreen} options={{ tabBarLabel: t('nav.budget') }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: t('nav.profile') }} />
     </Tab.Navigator>
@@ -86,11 +90,8 @@ const MainNavigator = () => {
       <Stack.Screen name="Reminders" component={RemindersScreen} />
       <Stack.Screen name="Categories" component={CategoriesScreen} />
       <Stack.Screen name="Household" component={HouseholdScreen} />
-      <Stack.Screen
-        name="ScanReceipt"
-        component={ScanReceiptScreen}
-        options={{ presentation: 'modal' }}
-      />
+      <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen
         name="Pin"
         component={PinScreen}
@@ -113,6 +114,7 @@ const createStyles = (colors) => StyleSheet.create({
   tabBarLabel: {
     fontSize: 10,
     fontWeight: '600',
+    fontFamily: FONT_FAMILY.semibold,
   },
   tabBarBackground: {
     flex: 1,

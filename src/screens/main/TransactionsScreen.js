@@ -13,7 +13,7 @@ import { selectTransactions } from '@store/transactionSlice';
 import { selectCategories } from '@store/categorySlice';
 import { useTransactions } from '@hooks/useTransactions';
 import TransactionCard from '@components/transaction/TransactionCard';
-import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING } from '@constants/theme';
 import { formatDate } from '@utils/formatters';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
@@ -29,11 +29,25 @@ export const TransactionsScreen = ({ navigation }) => {
     { id: null, label: t('transactions.typeAll') },
     { id: 'expense', label: t('transactions.typeExpense') },
     { id: 'income', label: t('transactions.typeIncome') },
+    { id: 'debt', label: t('transactions.typeDebt') },
   ];
 
   const [typeFilter, setTypeFilter] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState(null);
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
+
+  const getCategoryDisplayName = (category) => {
+    if (category?.isDefault && category?.id) {
+      const translatedName = t(`categories.names.${category.id}`);
+      return translatedName !== `categories.names.${category.id}` ? translatedName : category.name;
+    }
+    return category?.name || '';
+  };
+
+  const categoryMap = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories]
+  );
 
   const filtered = useMemo(() => {
     return transactions.filter((transaction) => {
@@ -48,10 +62,16 @@ export const TransactionsScreen = ({ navigation }) => {
     filtered.forEach((transaction) => {
       const key = formatDate(transaction.date, 'yyyy-MM-dd', language);
       if (!groups[key]) groups[key] = { date: transaction.date, items: [] };
-      groups[key].items.push(transaction);
+      const category = categoryMap.get(transaction.categoryId);
+      groups[key].items.push({
+        ...transaction,
+        category: getCategoryDisplayName(category) || transaction.category,
+        categoryIcon: transaction.categoryIcon || category?.icon,
+        categoryColor: transaction.categoryColor || category?.color,
+      });
     });
     return Object.values(groups).sort((a, b) => new Date(b.date) - new Date(a.date));
-  }, [filtered, language]);
+  }, [filtered, language, categoryMap, t]);
 
   const handleDelete = (transactionId) => {
     Alert.alert(t('transactions.deleteTitle'), t('transactions.deleteMessage'), [
@@ -109,8 +129,12 @@ export const TransactionsScreen = ({ navigation }) => {
           onPress={() => setShowCategoryFilter(!showCategoryFilter)}
         >
           <Ionicons name="filter" size={16} color={categoryFilter ? colors.primary : colors.textMuted} />
-          <Text style={[styles.categoryFilterText, categoryFilter && { color: colors.primary }]}>
-            {categoryFilter ? categories.find((category) => category.id === categoryFilter)?.name || t('common.category') : t('common.category')}
+          <Text
+            style={[styles.categoryFilterText, categoryFilter && { color: colors.primary }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {categoryFilter ? getCategoryDisplayName(categories.find((category) => category.id === categoryFilter)) || t('common.category') : t('common.category')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -121,7 +145,7 @@ export const TransactionsScreen = ({ navigation }) => {
             style={[styles.categoryChip, !categoryFilter && styles.categoryChipActive]}
             onPress={() => { setCategoryFilter(null); setShowCategoryFilter(false); }}
           >
-            <Text style={[styles.categoryChipText, !categoryFilter && { color: colors.primary }]}>{t('common.all')}</Text>
+              <Text style={[styles.categoryChipText, !categoryFilter && { color: colors.primary }]}>{t('common.all')}</Text>
           </TouchableOpacity>
           {categories.map((category) => (
             <TouchableOpacity
@@ -131,7 +155,7 @@ export const TransactionsScreen = ({ navigation }) => {
             >
               <Text>{category.icon}</Text>
               <Text style={[styles.categoryChipText, categoryFilter === category.id && { color: colors.primary }]}>
-                {category.name}
+                {getCategoryDisplayName(category)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -179,7 +203,7 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
-  title: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: colors.textPrimary },
+  title: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
   addBtn: {
     width: 40,
     height: 40,
@@ -196,8 +220,9 @@ const createStyles = (colors) => StyleSheet.create({
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    gap: 8,
   },
-  typeFilters: { flexDirection: 'row', gap: 8 },
+  typeFilters: { flexDirection: 'row', gap: 8, flex: 1, flexWrap: 'wrap' },
   filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -207,7 +232,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: colors.border,
   },
   filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterChipText: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
+  filterChipText: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   filterChipTextActive: { color: '#FFFFFF' },
   categoryFilterBtn: {
     flexDirection: 'row',
@@ -219,9 +244,11 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+    flex: 1,
+    maxWidth: '50%',
   },
   categoryFilterActive: { borderColor: colors.primary },
-  categoryFilterText: { color: colors.textMuted, fontSize: FONT_SIZE.sm },
+  categoryFilterText: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, flex: 1, minWidth: 0 },
   categoryChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -243,26 +270,27 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: colors.border,
   },
   categoryChipActive: { borderColor: colors.primary },
-  categoryChipText: { color: colors.textSecondary, fontSize: FONT_SIZE.xs },
+  categoryChipText: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
   stats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
   },
-  statsText: { color: colors.textMuted, fontSize: FONT_SIZE.sm },
-  clearFilter: { color: colors.primary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
+  statsText: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
+  clearFilter: { color: colors.primary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   list: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl },
   group: { marginBottom: SPACING.md },
   groupDate: {
     color: colors.textMuted,
     fontSize: FONT_SIZE.sm,
     fontWeight: FONT_WEIGHT.medium,
+    fontFamily: FONT_FAMILY.medium,
     marginBottom: SPACING.sm,
   },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
   emptyIcon: { fontSize: 48, marginBottom: SPACING.md },
-  emptyText: { color: colors.textSecondary, fontSize: FONT_SIZE.lg },
+  emptyText: { color: colors.textSecondary, fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.regular },
 });
 
 export default TransactionsScreen;

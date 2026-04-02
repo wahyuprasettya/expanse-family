@@ -4,7 +4,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, BORDER_RADIUS, SPACING, SHADOWS } from '@constants/theme';
+import { BORDER_RADIUS, SPACING, SHADOWS } from '@constants/theme';
+import { useAppTheme } from '@hooks/useAppTheme';
 
 export const Card = ({
   children,
@@ -13,12 +14,14 @@ export const Card = ({
   gradient,
   onPress,
 }) => {
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
+
   if (variant === 'gradient') {
-    const { LinearGradient: LG } = require('expo-linear-gradient');
     return (
       <View style={[styles.base, styles.gradient, style]}>
         <LinearGradient
-          colors={gradient || Colors.gradients.primary}
+          colors={gradient || colors.gradients.primary}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFillObject}
@@ -51,14 +54,14 @@ export const Card = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors) => StyleSheet.create({
   base: {
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     overflow: 'hidden',
   },
   default: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     ...SHADOWS.sm,
   },
   gradient: {
@@ -73,7 +76,7 @@ const styles = StyleSheet.create({
   outlined: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
 });
 

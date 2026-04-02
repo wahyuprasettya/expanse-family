@@ -27,6 +27,7 @@ export const DEFAULT_CATEGORIES = [
   { id: 'other_income', name: 'Other Income', icon: '💰', color: '#14B8A6', type: 'income', isDefault: true },
 
   // ── Both ─────────────────────────────────────────────────
+  { id: 'debt', name: 'Debt', icon: '🧾', color: '#F97316', type: 'both', isDefault: true },
   { id: 'other', name: 'Other', icon: '📦', color: '#64748B', type: 'both', isDefault: true },
 ];
 

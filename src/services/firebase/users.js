@@ -22,6 +22,7 @@ export const updateUserProfile = async (userId, updates) => {
   }
 };
 
+
 /**
  * Update user currency preference
  */

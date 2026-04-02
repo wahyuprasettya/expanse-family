@@ -14,15 +14,15 @@ export const pickReceiptImage = async (useCamera = false) => {
       }
       result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
+        allowsEditing: false,
+        quality: 0.85,
         base64: true,
       });
     } else {
       result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
+        allowsEditing: false,
+        quality: 0.85,
         base64: true,
       });
     }
@@ -36,29 +36,22 @@ export const pickReceiptImage = async (useCamera = false) => {
   }
 };
 
-// ─── OCR via Google Cloud Vision API ─────────────────────────
-// You need to enable Google Cloud Vision API and add your API key
-export const extractTextFromReceipt = async (base64Image) => {
+// ─── Manual OCR Parsing ──────────────────────────────────────
+// This app intentionally avoids external OCR APIs.
+// The user can paste the text from a receipt or type it manually,
+// and we will parse the total, date, merchant, and itemized lines locally.
+export const extractTextFromReceipt = async (manualText) => {
   try {
-    const GOOGLE_VISION_API_KEY = 'YOUR_GOOGLE_CLOUD_VISION_API_KEY';
-    const response = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requests: [
-            {
-              image: { content: base64Image },
-              features: [{ type: 'TEXT_DETECTION', maxResults: 1 }],
-            },
-          ],
-        }),
-      }
-    );
+    const text = String(manualText || '').trim();
 
-    const data = await response.json();
-    const text = data.responses?.[0]?.fullTextAnnotation?.text || '';
+    if (!text) {
+      return {
+        text: '',
+        parsedData: null,
+        error: 'Teks struk masih kosong. Tempel atau ketik hasil baca struk dulu.',
+      };
+    }
+
     return { text, parsedData: parseReceiptText(text), error: null };
   } catch (error) {
     return { text: null, parsedData: null, error: error.message };
@@ -67,14 +60,16 @@ export const extractTextFromReceipt = async (base64Image) => {
 
 // ─── Parse Receipt Text ───────────────────────────────────────
 const parseReceiptText = (text) => {
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const normalizedText = normalizeReceiptText(text);
+  const lines = normalizedText.split('\n').map((l) => l.trim()).filter(Boolean);
+  const itemizedLines = extractItemizedLines(lines);
+  const itemizedTotal = itemizedLines.reduce((sum, item) => sum + item.amount, 0);
 
   // Detect total amount (various patterns)
   const totalPatterns = [
-    /total[:\s]+(?:rp\.?\s*)?([\d.,]+)/i,
-    /grand total[:\s]+(?:rp\.?\s*)?([\d.,]+)/i,
-    /jumlah[:\s]+(?:rp\.?\s*)?([\d.,]+)/i,
-    /amount[:\s]+(?:rp\.?\s*)?([\d.,]+)/i,
+    /(?:sub\s?total|subtotal)[:\s]+(?:rp\.?\s*|idr\s*)?([\d.,]+(?:\s*[\d.,]+)*)/i,
+    /(?:grand\s?total|total\s?bayar|total\s?belanja|total\s?harga|jumlah\s?bayar|amount|total)[:\s]+(?:rp\.?\s*|idr\s*|usd\s*|myr\s*|sgd\s*)?([\d.,]+(?:\s*[\d.,]+)*)/i,
+    /(?:total)\s*(?:rp\.?\s*|idr\s*)?([\d.,]+(?:\s*[\d.,]+)*)/i,
   ];
 
   let amount = null;
@@ -82,7 +77,7 @@ const parseReceiptText = (text) => {
     for (const line of lines) {
       const match = line.match(pattern);
       if (match) {
-        amount = parseFloat(match[1].replace(/[.,]/g, '').replace(',', '.'));
+        amount = parseReceiptAmount(match[1]);
         break;
       }
     }
@@ -90,18 +85,89 @@ const parseReceiptText = (text) => {
   }
 
   // Detect date
-  const datePattern = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/;
+  const datePatterns = [
+    /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/,
+    /(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/,
+  ];
   let date = new Date().toISOString().split('T')[0];
   for (const line of lines) {
-    const match = line.match(datePattern);
-    if (match) {
-      date = `${match[3].length === 2 ? '20' + match[3] : match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
-      break;
+    for (const datePattern of datePatterns) {
+      const match = line.match(datePattern);
+      if (match) {
+        if (datePattern === datePatterns[0]) {
+          date = `${match[3].length === 2 ? `20${match[3]}` : match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+        } else {
+          date = `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+        }
+        break;
+      }
     }
   }
 
   // Detect merchant/store name (first non-empty line usually)
-  const description = lines[0] || 'Receipt scan';
+  const description = detectMerchantName(lines) || 'Receipt scan';
 
-  return { amount, date, description };
+  const amountSource = amount
+    ? 'detected_total'
+    : itemizedLines.length > 0
+      ? 'manual_sum'
+      : 'not_found';
+
+  return {
+    amount: amount || itemizedTotal || null,
+    amountSource,
+    date,
+    description,
+    itemizedLines,
+    itemizedTotal: itemizedTotal || null,
+  };
 };
+
+const parseReceiptAmount = (rawValue) => {
+  const sanitized = String(rawValue).replace(/[^\d.,]/g, '');
+  if (!sanitized) return null;
+
+  const lastComma = sanitized.lastIndexOf(',');
+  const lastDot = sanitized.lastIndexOf('.');
+  const lastSeparatorIndex = Math.max(lastComma, lastDot);
+
+  if (lastSeparatorIndex !== -1) {
+    const decimalPart = sanitized.slice(lastSeparatorIndex + 1);
+    if (decimalPart.length === 2) {
+      const normalized = `${sanitized.slice(0, lastSeparatorIndex).replace(/[.,]/g, '')}.${decimalPart}`;
+      return Math.round(parseFloat(normalized) || 0);
+    }
+  }
+
+  return parseInt(sanitized.replace(/[.,]/g, ''), 10) || null;
+};
+
+const normalizeReceiptText = (text) => String(text || '')
+  .replace(/\r/g, '\n')
+  .replace(/[•·]/g, ' ')
+  .replace(/[|]/g, ' ')
+  .replace(/\u00A0/g, ' ');
+
+const detectMerchantName = (lines) => {
+  const ignored = /(thank you|terima kasih|receipt|struk|invoice|bill|total|subtotal|cashier|kasir|tax|ppn|pajak|date|waktu|time)/i;
+  return lines.find((line) => line.length > 2 && !ignored.test(line)) || lines[0] || '';
+};
+
+const isSummaryLine = (line) => /(sub\s?total|subtotal|grand total|total|jumlah|tax|pajak|ppn|cash|tunai|kembalian|change|diskon|discount|service|debit|credit|card|bayar|payment|paid)/i.test(line);
+const isLikelyDateOrTime = (line) => /(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})|(\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2})|(\d{1,2}:\d{2})/.test(line);
+
+const extractItemizedLines = (lines) => lines
+  .map((line) => {
+    if (isSummaryLine(line) || isLikelyDateOrTime(line)) return null;
+
+    const match = line.match(/^(.+?)\s+(?:rp\.?\s*|idr\s*|usd\s*|myr\s*|sgd\s*|₱\s*|฿\s*|¥\s*|€\s*|\$\s*)?([\d][\d.,\s]*)$/i);
+    if (!match) return null;
+
+    const name = match[1].trim();
+    const amount = parseReceiptAmount(match[2]);
+
+    if (!name || !/[A-Za-z]/.test(name) || !amount || amount < 100) return null;
+
+    return { name, amount };
+  })
+  .filter(Boolean);

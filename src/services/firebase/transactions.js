@@ -7,6 +7,7 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  getDoc,
   query,
   where,
   orderBy,
@@ -18,12 +19,14 @@ import {
   startAfter,
 } from 'firebase/firestore';
 import { db } from './config';
+import { logAppNotification } from './appNotifications';
 
 const TRANSACTIONS_COLLECTION = 'transactions';
 
 // ─── Add Transaction ─────────────────────────────────────────
 export const addTransaction = async (accountId, actor, transactionData) => {
   try {
+    const now = serverTimestamp();
     const docRef = await addDoc(collection(db, TRANSACTIONS_COLLECTION), {
       userId: actor.uid,
       householdId: accountId,
@@ -37,8 +40,20 @@ export const addTransaction = async (accountId, actor, transactionData) => {
       date: Timestamp.fromDate(new Date(transactionData.date)),
       receiptUrl: transactionData.receiptUrl || null,
       tags: transactionData.tags || [],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      debtMeta: transactionData.debtMeta || null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await logAppNotification({
+      userId: actor.uid,
+      title: 'Transaksi baru ditambahkan',
+      body: `${actor.displayName || actor.email || 'Member'} menambahkan ${transactionData.category} sebesar ${transactionData.amount}`,
+      action: 'insert',
+      entityType: 'transaction',
+      entityId: docRef.id,
+      actorName: actor.displayName || actor.email || 'Member',
+      actorUid: actor.uid,
+      metadata: { householdId: accountId },
     });
     return { id: docRef.id, error: null };
   } catch (error) {
@@ -50,9 +65,21 @@ export const addTransaction = async (accountId, actor, transactionData) => {
 export const updateTransaction = async (transactionId, updates) => {
   try {
     const ref = doc(db, TRANSACTIONS_COLLECTION, transactionId);
+    const beforeSnap = await getDoc(ref);
+    const previous = beforeSnap.exists() ? beforeSnap.data() : null;
     await updateDoc(ref, {
       ...updates,
       updatedAt: serverTimestamp(),
+    });
+    await logAppNotification({
+      userId: updates.userId || previous?.userId,
+      title: 'Transaksi diperbarui',
+      body: `${updates.updatedByName || previous?.createdByName || 'Member'} memperbarui transaksi`,
+      action: 'update',
+      entityType: 'transaction',
+      entityId: transactionId,
+      actorName: updates.updatedByName || previous?.createdByName || 'Member',
+      actorUid: updates.updatedByUid || null,
     });
     return { error: null };
   } catch (error) {
@@ -63,7 +90,22 @@ export const updateTransaction = async (transactionId, updates) => {
 // ─── Delete Transaction ──────────────────────────────────────
 export const deleteTransaction = async (transactionId) => {
   try {
-    await deleteDoc(doc(db, TRANSACTIONS_COLLECTION, transactionId));
+    const ref = doc(db, TRANSACTIONS_COLLECTION, transactionId);
+    const beforeSnap = await getDoc(ref);
+    const previous = beforeSnap.exists() ? beforeSnap.data() : null;
+    await deleteDoc(ref);
+    if (previous?.userId) {
+      await logAppNotification({
+        userId: previous.userId,
+        title: 'Transaksi dihapus',
+        body: `${previous.createdByName || 'Member'} menghapus transaksi`,
+        action: 'delete',
+        entityType: 'transaction',
+        entityId: transactionId,
+        actorName: previous.createdByName || 'Member',
+        actorUid: previous.userId,
+      });
+    }
     return { error: null };
   } catch (error) {
     return { error: error.message };
@@ -89,8 +131,9 @@ export const subscribeToTransactions = (accountId, callback, filters = {}) => {
     const transactions = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
-      date: doc.data().date?.toDate(),
-      createdAt: doc.data().createdAt?.toDate(),
+      date: doc.data().date?.toDate().toISOString(),
+      createdAt: doc.data().createdAt?.toDate?.()?.toISOString?.() || null,
+      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString?.() || null,
     }));
     callback(transactions);
   });
@@ -111,6 +154,8 @@ export const getTransactionsByDateRange = async (accountId, startDate, endDate) 
       id: doc.id,
       ...doc.data(),
       date: doc.data().date?.toDate(),
+      createdAt: doc.data().createdAt?.toDate?.()?.toISOString?.() || null,
+      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString?.() || null,
     }));
     return { transactions, error: null };
   } catch (error) {
@@ -122,7 +167,7 @@ export const getTransactionsByDateRange = async (accountId, startDate, endDate) 
 export const calculateBalance = (transactions) => {
   return transactions.reduce((acc, t) => {
     if (t.type === 'income') return acc + t.amount;
-    if (t.type === 'expense') return acc - t.amount;
+    if (t.type === 'expense' || t.type === 'debt') return acc - t.amount;
     return acc;
   }, 0);
 };
@@ -136,7 +181,9 @@ export const getMonthlyReport = async (accountId, year, month) => {
   if (error) return { report: null, error };
 
   const income = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const expense = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const expense = transactions
+    .filter((t) => t.type === 'expense' || t.type === 'debt')
+    .reduce((s, t) => s + t.amount, 0);
 
   // Group by category
   const byCategory = transactions.reduce((acc, t) => {

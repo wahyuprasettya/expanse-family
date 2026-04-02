@@ -13,7 +13,7 @@ import { useSelector } from 'react-redux';
 import { selectProfile, selectUser } from '@store/authSlice';
 import { getMonthlyReport } from '@services/firebase/transactions';
 import { formatCurrency, formatCurrencyCompact, formatDate } from '@utils/formatters';
-import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING, SHADOWS } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { exportToCSV, exportToPDF } from '@services/export';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
@@ -57,7 +57,7 @@ export const ReportsScreen = () => {
   };
 
   const pieData = report?.byCategory
-    ?.filter((category) => category.type === 'expense')
+    ?.filter((category) => category.type === 'expense' || category.type === 'debt')
     ?.slice(0, 6)
     ?.map((category, index) => ({
       name: category.name.split(' ')[0],
@@ -84,7 +84,7 @@ export const ReportsScreen = () => {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={true}>
         <LinearGradient colors={colors.gradients.header} style={styles.header}>
           <Text style={styles.title}>{t('reports.title')}</Text>
           <View style={styles.exportBtns}>
@@ -171,7 +171,7 @@ export const ReportsScreen = () => {
             <View style={styles.categoryBreakdown}>
               <Text style={styles.chartTitle}>📋 {t('reports.categoryBreakdown')}</Text>
               {report.byCategory.sort((a, b) => b.total - a.total).map((category, index) => {
-                const total = category.type === 'expense' ? report.expense : report.income;
+                const total = category.type === 'income' ? report.income : report.expense;
                 const percentage = total > 0 ? (category.total / total) * 100 : 0;
 
                 return (
@@ -193,6 +193,7 @@ export const ReportsScreen = () => {
                   </View>
                 );
               })}
+
             </View>
           )}
 
@@ -204,12 +205,13 @@ export const ReportsScreen = () => {
           )}
         </View>
       </ScrollView>
+      <View style={{ height: 30 }}></View>
     </SafeAreaView>
   );
 };
 
 const createStyles = (colors) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  safe: { flex: 1, backgroundColor: colors.background, marginBottom: 20 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -217,7 +219,7 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
-  title: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: colors.textPrimary },
+  title: { fontSize: FONT_SIZE.xl,fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
   exportBtns: { flexDirection: 'row', gap: 8 },
   exportBtn: {
     flexDirection: 'row',
@@ -230,7 +232,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: `${colors.primary}40`,
   },
-  exportBtnText: { color: colors.primary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium },
+  exportBtnText: { color: colors.primary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   content: { padding: SPACING.lg },
   periodPicker: {
     flexDirection: 'row',
@@ -244,7 +246,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  periodText: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: colors.textPrimary },
+  periodText: { fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
   summaryRow: { flexDirection: 'row', gap: SPACING.md, marginBottom: SPACING.md },
   summaryCard: {
     flex: 1,
@@ -253,8 +255,8 @@ const createStyles = (colors) => StyleSheet.create({
     ...SHADOWS.md,
   },
   summaryCardGradient: {},
-  summaryLabel: { color: 'rgba(255,255,255,0.75)', fontSize: FONT_SIZE.sm },
-  summaryValue: { color: '#FFFFFF', fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, marginTop: 4 },
+  summaryLabel: { color: 'rgba(255,255,255,0.75)', fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
+  summaryValue: { color: '#FFFFFF', fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, marginTop: 4 },
   balanceCardFull: {
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.lg,
@@ -264,8 +266,8 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: colors.border,
     ...SHADOWS.sm,
   },
-  balanceRowLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, marginBottom: 4 },
-  balanceRowValue: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold },
+  balanceRowLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, marginBottom: 4 },
+  balanceRowValue: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
   chartCard: {
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.lg,
@@ -274,7 +276,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  chartTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.semibold, marginBottom: SPACING.md },
+  chartTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.semibold, marginBottom: SPACING.md },
   categoryBreakdown: {
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.lg,
@@ -289,17 +291,18 @@ const createStyles = (colors) => StyleSheet.create({
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+
   },
   categoryRowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   categoryDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
-  categoryRowName: { color: colors.textPrimary, fontSize: FONT_SIZE.sm, flex: 1 },
-  categoryRowCount: { color: colors.textMuted, fontSize: FONT_SIZE.xs },
+  categoryRowName: { color: colors.textPrimary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, flex: 1 },
+  categoryRowCount: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
   categoryRowRight: { alignItems: 'flex-end' },
-  categoryRowAmount: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold },
-  categoryRowPct: { color: colors.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
+  categoryRowAmount: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, fontFamily: FONT_FAMILY.semibold },
+  categoryRowPct: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 2 },
   empty: { alignItems: 'center', paddingVertical: SPACING.xxl },
   emptyIcon: { fontSize: 48, marginBottom: SPACING.md },
-  emptyText: { color: colors.textSecondary, fontSize: FONT_SIZE.lg },
+  emptyText: { color: colors.textSecondary, fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.regular },
 });
 
 export default ReportsScreen;

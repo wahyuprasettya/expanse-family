@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BORDER_RADIUS, FONT_SIZE, SPACING, SHADOWS } from '@constants/theme';
+import { BORDER_RADIUS, FONT_SIZE, SPACING, SHADOWS, FONT_FAMILY } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
 
 export const Input = ({
@@ -94,6 +94,7 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.textSecondary,
     fontSize: FONT_SIZE.sm,
     fontWeight: '500',
+    fontFamily: FONT_FAMILY.medium,
     marginBottom: 6,
   },
   inputWrapper: {
@@ -116,11 +117,13 @@ const createStyles = (colors) => StyleSheet.create({
     fontSize: FONT_SIZE.md,
     paddingLeft: SPACING.md,
     fontWeight: '600',
+    fontFamily: FONT_FAMILY.semibold,
   },
   input: {
     flex: 1,
     color: colors.textPrimary,
     fontSize: FONT_SIZE.md,
+    fontFamily: FONT_FAMILY.regular,
     paddingHorizontal: SPACING.md,
     paddingVertical: 14,
   },
@@ -128,8 +131,8 @@ const createStyles = (colors) => StyleSheet.create({
   inputWithPrefix: { paddingLeft: SPACING.sm },
   multiline: { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 },
   rightIcon: { paddingRight: SPACING.md },
-  errorText: { color: colors.expense, fontSize: FONT_SIZE.xs, marginTop: 4 },
-  hintText: { color: colors.textMuted, fontSize: FONT_SIZE.xs, marginTop: 4 },
+  errorText: { color: colors.expense, fontSize: FONT_SIZE.xs, marginTop: 4, fontFamily: FONT_FAMILY.regular },
+  hintText: { color: colors.textMuted, fontSize: FONT_SIZE.xs, marginTop: 4, fontFamily: FONT_FAMILY.regular },
 });
 
 export default Input;
