@@ -8,7 +8,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSelector } from 'react-redux';
 import { useTransactions } from '@hooks/useTransactions';
+import { selectCategories } from '@store/categorySlice';
 import { formatCurrency, formatDate, formatTime } from '@utils/formatters';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
@@ -17,6 +19,7 @@ import { useTranslation } from '@hooks/useTranslation';
 export const TransactionDetailScreen = ({ navigation, route }) => {
   const { transaction } = route.params;
   const { deleteTransaction } = useTransactions();
+  const categories = useSelector(selectCategories);
   const { colors } = useAppTheme();
   const { t, language } = useTranslation();
   const styles = createStyles(colors);
@@ -25,6 +28,13 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
   const isDebt = transaction.type === 'debt';
   const typeColor = isIncome ? colors.income : colors.expense;
   const gradientColors = isIncome ? colors.gradients.income : colors.gradients.expense;
+  const category = categories.find((item) => item.id === transaction.categoryId);
+  const categoryName = category?.isDefault && category?.id
+    ? (() => {
+        const translatedName = t(`categories.names.${category.id}`);
+        return translatedName !== `categories.names.${category.id}` ? translatedName : category.name;
+      })()
+    : category?.name || transaction.category;
 
   const handleDelete = () => {
     Alert.alert(t('transaction.deleteTitle'), t('transaction.deleteMessage'), [
@@ -70,7 +80,7 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
           <Text style={styles.amountValue}>
             {isIncome ? '+' : '-'}{formatCurrency(transaction.amount, 'IDR', language)}
           </Text>
-          <Text style={styles.categoryName}>{transaction.category}</Text>
+          <Text style={styles.categoryName}>{categoryName}</Text>
         </LinearGradient>
       </View>
 
@@ -78,7 +88,7 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
         <View style={styles.detailCard}>
           <DetailRow label={t('common.date')} value={formatDate(transaction.date, 'EEEE, dd MMMM yyyy', language)} />
           <DetailRow label={t('common.time')} value={formatTime(transaction.date, language)} />
-          <DetailRow label={t('common.category')} value={transaction.category} />
+          <DetailRow label={t('common.category')} value={categoryName} />
           <DetailRow label={t('transaction.type')} value={t(`transaction.typeValue.${transaction.type}`)} valueColor={typeColor} />
           {transaction.createdByName ? (
             <DetailRow label={t('transaction.addedBy')} value={transaction.createdByName} />
@@ -107,7 +117,7 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
           <View style={[styles.relatedCard, { borderColor: typeColor }]}>
             <Text style={styles.relatedText}>
               {t('transaction.categoryInfo', {
-                category: transaction.category,
+                category: categoryName,
                 type: transaction.type,
                 amount: formatCurrency(transaction.amount, 'IDR', language),
               })}

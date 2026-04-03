@@ -3,7 +3,7 @@
 // ============================================================
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, Alert
+  View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,7 +34,6 @@ export const TransactionsScreen = ({ navigation }) => {
 
   const [typeFilter, setTypeFilter] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState(null);
-  const [showCategoryFilter, setShowCategoryFilter] = useState(false);
 
   const getCategoryDisplayName = (category) => {
     if (category?.isDefault && category?.id) {
@@ -110,57 +109,62 @@ export const TransactionsScreen = ({ navigation }) => {
       </LinearGradient>
 
       <View style={styles.filters}>
-        <View style={styles.typeFilters}>
-          {TYPE_FILTERS.map((filter) => (
-            <TouchableOpacity
-              key={String(filter.id)}
-              style={[styles.filterChip, typeFilter === filter.id && styles.filterChipActive]}
-              onPress={() => setTypeFilter(filter.id)}
-            >
-              <Text style={[styles.filterChipText, typeFilter === filter.id && styles.filterChipTextActive]}>
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.filterSection}>
+          <Text style={styles.filterLabel}>{t('transaction.type')}</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator
+            contentContainerStyle={styles.horizontalFilterContent}
+          >
+            {TYPE_FILTERS.map((filter) => (
+              <TouchableOpacity
+                key={String(filter.id)}
+                style={[styles.filterChip, typeFilter === filter.id && styles.filterChipActive]}
+                onPress={() => setTypeFilter(filter.id)}
+              >
+                <Text style={[styles.filterChipText, typeFilter === filter.id && styles.filterChipTextActive]}>
+                  {filter.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
-        <TouchableOpacity
-          style={[styles.categoryFilterBtn, categoryFilter && styles.categoryFilterActive]}
-          onPress={() => setShowCategoryFilter(!showCategoryFilter)}
-        >
-          <Ionicons name="filter" size={16} color={categoryFilter ? colors.primary : colors.textMuted} />
-          <Text
-            style={[styles.categoryFilterText, categoryFilter && { color: colors.primary }]}
-            numberOfLines={1}
-            ellipsizeMode="tail"
+        <View style={styles.filterSection}>
+          <Text style={styles.filterLabel}>{t('common.category')}</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator
+            contentContainerStyle={styles.horizontalFilterContent}
           >
-            {categoryFilter ? getCategoryDisplayName(categories.find((category) => category.id === categoryFilter)) || t('common.category') : t('common.category')}
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.categoryChip, !categoryFilter && styles.categoryChipActive]}
+              onPress={() => setCategoryFilter(null)}
+            >
+              <Ionicons
+                name="apps-outline"
+                size={14}
+                color={!categoryFilter ? '#FFFFFF' : colors.textMuted}
+              />
+              <Text style={[styles.categoryChipText, !categoryFilter && styles.categoryChipTextActive]}>
+                {t('common.all')}
+              </Text>
+            </TouchableOpacity>
+            {categories.map((category) => (
+              <TouchableOpacity
+                key={category.id}
+                style={[styles.categoryChip, categoryFilter === category.id && styles.categoryChipActive]}
+                onPress={() => setCategoryFilter(category.id)}
+              >
+                <Text>{category.icon}</Text>
+                <Text style={[styles.categoryChipText, categoryFilter === category.id && styles.categoryChipTextActive]}>
+                  {getCategoryDisplayName(category)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       </View>
-
-      {showCategoryFilter && (
-        <View style={styles.categoryChips}>
-          <TouchableOpacity
-            style={[styles.categoryChip, !categoryFilter && styles.categoryChipActive]}
-            onPress={() => { setCategoryFilter(null); setShowCategoryFilter(false); }}
-          >
-              <Text style={[styles.categoryChipText, !categoryFilter && { color: colors.primary }]}>{t('common.all')}</Text>
-          </TouchableOpacity>
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category.id}
-              style={[styles.categoryChip, categoryFilter === category.id && styles.categoryChipActive]}
-              onPress={() => { setCategoryFilter(category.id); setShowCategoryFilter(false); }}
-            >
-              <Text>{category.icon}</Text>
-              <Text style={[styles.categoryChipText, categoryFilter === category.id && { color: colors.primary }]}>
-                {getCategoryDisplayName(category)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
 
       <View style={styles.stats}>
         <Text style={styles.statsText}>
@@ -213,16 +217,25 @@ const createStyles = (colors) => StyleSheet.create({
     justifyContent: 'center',
   },
   filters: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    gap: SPACING.sm,
+  },
+  filterSection: {
     gap: 8,
   },
-  typeFilters: { flexDirection: 'row', gap: 8, flex: 1, flexWrap: 'wrap' },
+  filterLabel: {
+    color: colors.textMuted,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.medium,
+  },
+  horizontalFilterContent: {
+    paddingRight: SPACING.lg,
+    gap: 8,
+  },
   filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -234,43 +247,21 @@ const createStyles = (colors) => StyleSheet.create({
   filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   filterChipText: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   filterChipTextActive: { color: '#FFFFFF' },
-  categoryFilterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flex: 1,
-    maxWidth: '50%',
-  },
-  categoryFilterActive: { borderColor: colors.primary },
-  categoryFilterText: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, flex: 1, minWidth: 0 },
-  categoryChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: BORDER_RADIUS.full,
     borderWidth: 1,
     borderColor: colors.border,
+    backgroundColor: colors.surface,
+    maxWidth: 180,
   },
-  categoryChipActive: { borderColor: colors.primary },
+  categoryChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   categoryChipText: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
+  categoryChipTextActive: { color: '#FFFFFF' },
   stats: {
     flexDirection: 'row',
     justifyContent: 'space-between',

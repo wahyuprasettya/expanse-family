@@ -1,7 +1,7 @@
 // ============================================================
 // Categories Screen (manage default + custom categories)
 // ============================================================
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Alert, Modal, TextInput, ScrollView
@@ -9,10 +9,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { selectUser } from '@store/authSlice';
-import { selectCategories, setCategories, addCategoryLocal, removeCategoryLocal } from '@store/categorySlice';
-import { subscribeToCategories, addCategory, deleteCategory } from '@services/firebase/categories';
+import { selectCategories } from '@store/categorySlice';
+import { addCategory, deleteCategory } from '@services/firebase/categories';
 import Button from '@components/common/Button';
 import Input from '@components/common/Input';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
@@ -22,7 +22,6 @@ import { useTranslation } from '@hooks/useTranslation';
 // Available icons for category picker
 const ICON_OPTIONS = ['🏠','🍔','🚗','🎬','💊','📚','✈️','🛍️','👕','💆','🎁','💼','💻','📈','🏢','🏘️','🎉','💰','📦','🐾','⚽','🎵','🍷','☕','🏋️','🌿','💡','🔧'];
 export const CategoriesScreen = ({ navigation }) => {
-  const dispatch = useDispatch();
   const user = useSelector(selectUser);
   const categories = useSelector(selectCategories);
   const { colors } = useAppTheme();
@@ -38,14 +37,6 @@ export const CategoriesScreen = ({ navigation }) => {
     type: 'expense',
   });
   const [activeType, setActiveType] = useState('expense');
-
-  useEffect(() => {
-    if (!user?.uid) return;
-    const unsubscribe = subscribeToCategories(user.uid, (cats) => {
-      dispatch(setCategories(cats));
-    });
-    return unsubscribe;
-  }, [user?.uid, dispatch]);
 
   const setField = (key) => (val) => setForm((f) => ({ ...f, [key]: val }));
 
@@ -66,7 +57,6 @@ export const CategoriesScreen = ({ navigation }) => {
     setLoading(false);
     if (error) Alert.alert(t('common.error'), error);
     else {
-      dispatch(addCategoryLocal({ id, ...form, isCustom: true }));
       setShowAddModal(false);
       setForm({ name: '', icon: '📦', color: colors.primary, type: 'expense' });
     }
@@ -80,7 +70,6 @@ export const CategoriesScreen = ({ navigation }) => {
         text: t('common.delete'), style: 'destructive',
         onPress: async () => {
           await deleteCategory(cat.id);
-          dispatch(removeCategoryLocal(cat.id));
         },
       },
     ]);

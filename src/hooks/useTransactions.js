@@ -1,11 +1,10 @@
 // ============================================================
 // useTransactions Hook
 // ============================================================
-import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from '@hooks/useTranslation';
-import { subscribeToTransactions, addTransaction as addTxService, deleteTransaction as deleteTxService } from '@services/firebase/transactions';
-import { setTransactions, addTransactionLocal, removeTransactionLocal, selectTransactions, selectBalance, selectFilteredTransactions } from '@store/transactionSlice';
+import { addTransaction as addTxService, deleteTransaction as deleteTxService } from '@services/firebase/transactions';
+import { selectTransactions, selectBalance, selectFilteredTransactions } from '@store/transactionSlice';
 import { selectProfile, selectUser } from '@store/authSlice';
 import { updateBudgetSpent } from '@services/firebase/budgets';
 import { sendTransactionNotification, sendBudgetWarningNotification, sendHouseholdNotification } from '@services/firebase/notifications';
@@ -24,19 +23,31 @@ export const useTransactions = () => {
 
   const accountId = profile?.householdId || user?.uid;
 
-  useEffect(() => {
-    if (!accountId) return;
-    const unsubscribe = subscribeToTransactions(accountId, (txs) => {
-      dispatch(setTransactions(txs));
-    });
-    return unsubscribe;
-  }, [accountId, dispatch]);
-
   const addTransaction = async (data) => {
     if (!user?.uid || !accountId) return { error: 'Not authenticated' };
 
+    console.log('[useTransactions] addTransaction:call', {
+      accountId,
+      userUid: user.uid,
+      clientRequestId: data.clientRequestId || null,
+      type: data.type,
+      amount: data.amount,
+      categoryId: data.categoryId,
+    });
+
     const { id, error } = await addTxService(accountId, user, data);
-    if (error) return { error };
+    if (error) {
+      console.log('[useTransactions] addTransaction:error', {
+        clientRequestId: data.clientRequestId || null,
+        error,
+      });
+      return { error };
+    }
+
+    console.log('[useTransactions] addTransaction:success', {
+      id,
+      clientRequestId: data.clientRequestId || null,
+    });
 
     const newTx = {
       id,
@@ -47,59 +58,71 @@ export const useTransactions = () => {
       createdByName: user.displayName || user.email || 'Member',
       date: new Date(data.date).toISOString(),
     };
-    console.log('New transaction added:', newTx);
-    dispatch(addTransactionLocal(newTx));
-
-    
 
     if (data.type === 'debt' && data.debtMeta?.dueDate) {
-      await syncDebtReminder({
-        transactionId: id,
-        userId: user.uid,
-        creditorName: data.debtMeta.creditorName,
-        category: data.category,
-        amount: data.amount,
-        dueDate: data.debtMeta.dueDate,
-        remindDaysBefore: data.debtMeta.remindDaysBefore ?? 3,
-      }, t);
+      try {
+        await syncDebtReminder({
+          transactionId: id,
+          userId: user.uid,
+          creditorName: data.debtMeta.creditorName,
+          category: data.category,
+          amount: data.amount,
+          dueDate: data.debtMeta.dueDate,
+          remindDaysBefore: data.debtMeta.remindDaysBefore ?? 3,
+        }, t);
+      } catch (sideEffectError) {
+        console.warn('Debt reminder sync failed:', sideEffectError);
+      }
     }
 
     // Send push notification for expense
     if (data.type === 'expense') {
-      await sendTransactionNotification({
-        ...newTx,
-        title: `${data.categoryIcon || '💸'} ${t('transactionNotification.expenseTitle')}`,
-        body: t('transactionNotification.transactionBody', {
-          category: data.category,
-          amount: formatCurrency(data.amount, language),
-        }),
-      });
+      try {
+        await sendTransactionNotification({
+          ...newTx,
+          title: `${data.categoryIcon || '💸'} ${t('transactionNotification.expenseTitle')}`,
+          body: t('transactionNotification.transactionBody', {
+            category: data.category,
+            amount: formatCurrency(data.amount, language),
+          }),
+        });
+      } catch (sideEffectError) {
+        console.warn('Transaction notification failed:', sideEffectError);
+      }
 
       // Send notification to other household members
       if (profile?.householdId && profile.householdId !== user.uid) {
-        await sendHouseholdNotification(
-          profile.householdId,
-          user.uid,
-          {
-            title: t('transactionNotification.householdAddedTitle', {
-              name: user.displayName || t('profile.fallbackUser'),
-            }),
-            body: t('transactionNotification.householdAddedBody', {
-              category: data.category,
-              amount: formatCurrency(data.amount, language),
-            }),
-            data: {
-              transactionId: id,
-              type: 'household_transaction',
-              action: 'added'
-            },
-          }
-        );
+        try {
+          await sendHouseholdNotification(
+            profile.householdId,
+            user.uid,
+            {
+              title: t('transactionNotification.householdAddedTitle', {
+                name: user.displayName || t('profile.fallbackUser'),
+              }),
+              body: t('transactionNotification.householdAddedBody', {
+                category: data.category,
+                amount: formatCurrency(data.amount, language),
+              }),
+              data: {
+                transactionId: id,
+                type: 'household_transaction',
+                action: 'added'
+              },
+            }
+          );
+        } catch (sideEffectError) {
+          console.warn('Household notification failed:', sideEffectError);
+        }
       }
 
       // Check budget and warn if needed
       const now = new Date();
-      await updateBudgetSpent(user.uid, data.categoryId, now.getFullYear(), now.getMonth() + 1, data.amount);
+      try {
+        await updateBudgetSpent(user.uid, data.categoryId, now.getFullYear(), now.getMonth() + 1, data.amount);
+      } catch (sideEffectError) {
+        console.warn('Budget spent update failed:', sideEffectError);
+      }
 
       // Find budget for this category and check warning threshold
       const budget = budgets.find(
@@ -110,15 +133,19 @@ export const useTransactions = () => {
       if (budget && budget.amount > 0) {
         const newSpent = (budget.spent || 0) + data.amount;
         if (newSpent / budget.amount >= 0.8) {
-          await sendBudgetWarningNotification({
-            title: t('transactionNotification.budgetWarningTitle', { category: data.category }),
-            body: t('transactionNotification.budgetWarningBody', {
-              category: data.category,
-              percent: Math.round((newSpent / budget.amount) * 100),
-              amount: formatCurrency(budget.amount - newSpent, language),
-            }),
-            name: data.category,
-          });
+          try {
+            await sendBudgetWarningNotification({
+              title: t('transactionNotification.budgetWarningTitle', { category: data.category }),
+              body: t('transactionNotification.budgetWarningBody', {
+                category: data.category,
+                percent: Math.round((newSpent / budget.amount) * 100),
+                amount: formatCurrency(budget.amount - newSpent, language),
+              }),
+              name: data.category,
+            });
+          } catch (sideEffectError) {
+            console.warn('Budget warning notification failed:', sideEffectError);
+          }
         }
       }
     }
@@ -132,29 +159,36 @@ export const useTransactions = () => {
 
     const { error } = await deleteTxService(txId);
     if (!error) {
-      await deleteRemindersByTransactionId(txId);
-      dispatch(removeTransactionLocal(txId));
+      try {
+        await deleteRemindersByTransactionId(txId);
+      } catch (sideEffectError) {
+        console.warn('Delete reminders failed:', sideEffectError);
+      }
 
       // Send notification to household members when transaction is deleted
       if (transactionToDelete && profile?.householdId && profile.householdId !== user.uid) {
-        await sendHouseholdNotification(
-          profile.householdId,
-          user.uid,
-          {
-            title: t('transactionNotification.householdDeletedTitle', {
-              name: user.displayName || t('profile.fallbackUser'),
-            }),
-            body: t('transactionNotification.householdDeletedBody', {
-              category: transactionToDelete.category,
-              amount: formatCurrency(transactionToDelete.amount, language),
-            }),
-            data: {
-              transactionId: txId,
-              type: 'household_transaction',
-              action: 'deleted'
-            },
-          }
-        );
+        try {
+          await sendHouseholdNotification(
+            profile.householdId,
+            user.uid,
+            {
+              title: t('transactionNotification.householdDeletedTitle', {
+                name: user.displayName || t('profile.fallbackUser'),
+              }),
+              body: t('transactionNotification.householdDeletedBody', {
+                category: transactionToDelete.category,
+                amount: formatCurrency(transactionToDelete.amount, language),
+              }),
+              data: {
+                transactionId: txId,
+                type: 'household_transaction',
+                action: 'deleted'
+              },
+            }
+          );
+        } catch (sideEffectError) {
+          console.warn('Delete household notification failed:', sideEffectError);
+        }
       }
     }
     return { error };

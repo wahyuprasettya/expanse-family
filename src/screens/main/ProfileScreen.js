@@ -391,11 +391,11 @@ export const ProfileScreen = ({ navigation }) => {
             <SettingRow
               colors={colors}
               styles={styles}
-              icon="chatbubble-ellipses-outline"
-              label={t("chat.title")}
-              subtitle={t("chat.subtitle")}
+              icon="clipboard-outline"
+              label={t("notes.title")}
+              subtitle={t("notes.subtitle")}
               color={colors.warning}
-              onPress={() => navigation.navigate("Chat")}
+              onPress={() => navigation.navigate("Notes")}
             />
             <SettingRow
               colors={colors}

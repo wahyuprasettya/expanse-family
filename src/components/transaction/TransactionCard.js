@@ -29,8 +29,12 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
       : null;
 
   return (
-    <TouchableOpacity onPress={() => onPress?.(transaction)} activeOpacity={0.75}>
-      <View style={styles.card}>
+    <View style={styles.card}>
+      <TouchableOpacity
+        onPress={() => onPress?.(transaction)}
+        activeOpacity={0.75}
+        style={styles.pressableContent}
+      >
         {/* Category Icon */}
         <View style={[styles.iconContainer, { backgroundColor: `${transaction.categoryColor || colors.primary}20` }]}>
           <Text style={styles.categoryIcon}>{transaction.categoryIcon || '📦'}</Text>
@@ -69,15 +73,14 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
             </Text>
           </View>
         </View>
+      </TouchableOpacity>
 
-        {/* Delete */}
-        {onDelete && (
-          <TouchableOpacity onPress={() => onDelete(transaction.id)} style={styles.deleteBtn}>
-            <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        )}
-      </View>
-    </TouchableOpacity>
+      {onDelete && (
+        <TouchableOpacity onPress={() => onDelete(transaction.id)} style={styles.deleteBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      )}
+    </View>
   );
 };
 
@@ -93,6 +96,11 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
     ...SHADOWS.sm,
+  },
+  pressableContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   iconContainer: {
     width: 48,
@@ -130,7 +138,7 @@ const createStyles = (colors) => StyleSheet.create({
     fontFamily: FONT_FAMILY.regular,
     marginTop: 2,
   },
-  amountContainer: { alignItems: 'flex-end' },
+  amountContainer: { alignItems: 'flex-end', marginLeft: 'auto' },
   amount: {
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
@@ -150,6 +158,7 @@ const createStyles = (colors) => StyleSheet.create({
   deleteBtn: {
     marginLeft: 8,
     padding: 4,
+    alignSelf: 'center',
   },
 });
 

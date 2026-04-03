@@ -1,9 +1,9 @@
 // ============================================================
 // Home Screen (Dashboard)
 // ============================================================
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ import { formatCurrency, formatCurrencyFull, formatDateSmart } from '@utils/form
 import TransactionCard from '@components/transaction/TransactionCard';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { useInsights } from '@hooks/useInsights';
+import { useTransactions } from '@hooks/useTransactions';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
 
@@ -36,6 +37,7 @@ export const HomeScreen = ({ navigation }) => {
   const budgetWarnings = useSelector(selectBudgetWarnings);
   const unreadNotifications = useSelector(selectUnreadAppNotificationCount);
   const insights = useInsights();
+  const { deleteTransaction } = useTransactions();
   const getCategoryDisplayName = (category) => {
     if (category?.isDefault && category?.id) {
       const translatedName = t(`categories.names.${category.id}`);
@@ -58,6 +60,42 @@ export const HomeScreen = ({ navigation }) => {
       };
     });
   }, [transactions, categories, t]);
+
+  useEffect(() => {
+    const duplicateIds = recentTransactions.reduce((acc, tx) => {
+      acc[tx.id] = (acc[tx.id] || 0) + 1;
+      return acc;
+    }, {});
+    const duplicateRequestIds = recentTransactions.reduce((acc, tx) => {
+      if (!tx.clientRequestId) return acc;
+      acc[tx.clientRequestId] = (acc[tx.clientRequestId] || 0) + 1;
+      return acc;
+    }, {});
+
+    console.log('[HomeScreen] recentTransactions', {
+      totalTransactionsInStore: transactions.length,
+      renderedRecentCount: recentTransactions.length,
+      ids: recentTransactions.map((tx) => tx.id),
+      clientRequestIds: recentTransactions.map((tx) => tx.clientRequestId || null),
+      duplicateIds: Object.entries(duplicateIds)
+        .filter(([, count]) => count > 1)
+        .map(([id, count]) => ({ id, count })),
+      duplicateClientRequestIds: Object.entries(duplicateRequestIds)
+        .filter(([, count]) => count > 1)
+        .map(([clientRequestId, count]) => ({ clientRequestId, count })),
+    });
+  }, [recentTransactions, transactions.length]);
+
+  const handleDelete = (transactionId) => {
+    Alert.alert(t('transactions.deleteTitle'), t('transactions.deleteMessage'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: () => deleteTransaction(transactionId),
+      },
+    ]);
+  };
   const firstName = user?.displayName?.split(' ')[0] || t('home.defaultName');
 
   const hour = new Date().getHours();
@@ -82,9 +120,9 @@ export const HomeScreen = ({ navigation }) => {
                   </View>
                 ) : null}
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.avatar}>
+              {/* <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.avatar}>
                 <Ionicons name="person" size={22} color="#FFFFFF" />
-              </TouchableOpacity>
+              </TouchableOpacity> */}
             </View>
           </View>
 
@@ -239,6 +277,7 @@ export const HomeScreen = ({ navigation }) => {
                     key={tx.id}
                     transaction={tx}
                     onPress={(t) => navigation.navigate('TransactionDetail', { transaction: t })}
+                    onDelete={handleDelete}
                   />
                 ))}
               </View>

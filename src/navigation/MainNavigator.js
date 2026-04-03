@@ -19,7 +19,7 @@ import CategoriesScreen from '@screens/category/CategoriesScreen';
 import PinScreen from '@screens/auth/PinScreen';
 import HouseholdScreen from '@screens/main/HouseholdScreen';
 import NotificationsScreen from '@screens/main/NotificationsScreen';
-import ChatScreen from '@screens/main/ChatScreen';
+import NotesScreen from '@screens/main/NotesScreen';
 import { BORDER_RADIUS, FONT_FAMILY } from '@constants/theme';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
@@ -90,7 +90,7 @@ const MainNavigator = () => {
       <Stack.Screen name="Reminders" component={RemindersScreen} />
       <Stack.Screen name="Categories" component={CategoriesScreen} />
       <Stack.Screen name="Household" component={HouseholdScreen} />
-      <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="Notes" component={NotesScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen
         name="Pin"

@@ -1,7 +1,7 @@
 // ============================================================
 // Reminders Screen (Bill Schedules)
 // ============================================================
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Alert, Modal, Switch
@@ -11,8 +11,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectUser } from '@store/authSlice';
-import { selectReminders, setReminders, addReminderLocal, removeReminderLocal } from '@store/reminderSlice';
-import { subscribeToReminders, addReminder, deleteReminder } from '@services/firebase/reminders';
+import { selectReminders, removeReminderLocal } from '@store/reminderSlice';
+import { addReminder, deleteReminder } from '@services/firebase/reminders';
 import Input from '@components/common/Input';
 import Button from '@components/common/Button';
 import { formatCurrency, formatDateSmart } from '@utils/formatters';
@@ -39,12 +39,6 @@ export const RemindersScreen = ({ navigation }) => {
     daysBefore: '1',
     isRecurring: true,
   });
-
-  useEffect(() => {
-    if (!user?.uid) return;
-    const unsub = subscribeToReminders(user.uid, (data) => dispatch(setReminders(data)));
-    return unsub;
-  }, [user?.uid, dispatch]);
 
   const setField = (key) => (val) => setForm((f) => ({ ...f, [key]: val }));
 

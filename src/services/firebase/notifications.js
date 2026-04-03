@@ -89,6 +89,11 @@ export const registerForPushNotifications = async (userId) => {
 
 // ─── Send Local Notification ─────────────────────────────────
 export const sendTransactionNotification = async (transaction) => {
+  console.log('[notifications] sendTransactionNotification:start', {
+    transactionId: transaction.id,
+    type: transaction.type,
+    title: transaction.title,
+  });
   await Notifications.scheduleNotificationAsync({
     content: {
       title: transaction.title,
@@ -98,10 +103,17 @@ export const sendTransactionNotification = async (transaction) => {
     },
     trigger: null, // Immediate
   });
+  console.log('[notifications] sendTransactionNotification:done', {
+    transactionId: transaction.id,
+  });
 };
 
 // ─── Send Budget Warning Notification ────────────────────────
 export const sendBudgetWarningNotification = async (category) => {
+  console.log('[notifications] sendBudgetWarningNotification:start', {
+    category: category.name,
+    title: category.title,
+  });
   await Notifications.scheduleNotificationAsync({
     content: {
       title: category.title,
@@ -110,6 +122,9 @@ export const sendBudgetWarningNotification = async (category) => {
       sound: 'default',
     },
     trigger: null,
+  });
+  console.log('[notifications] sendBudgetWarningNotification:done', {
+    category: category.name,
   });
 };
 
@@ -134,6 +149,13 @@ export const getHouseholdMembers = async (householdId) => {
 // ─── Send Push Notification to Household Members ────────────
 export const sendHouseholdNotification = async (householdId, senderUid, notification) => {
   try {
+    console.log('[notifications] sendHouseholdNotification:start', {
+      householdId,
+      senderUid,
+      type: notification?.data?.type || null,
+      action: notification?.data?.action || null,
+      transactionId: notification?.data?.transactionId || null,
+    });
     const members = await getHouseholdMembers(householdId);
 
     // Filter out the sender (don't send notification to themselves)
@@ -170,6 +192,11 @@ export const sendHouseholdNotification = async (householdId, senderUid, notifica
       const result = await response.json();
       console.log('Push notifications sent successfully:', result);
     }
+    console.log('[notifications] sendHouseholdNotification:done', {
+      householdId,
+      recipientCount: recipients.length,
+      transactionId: notification?.data?.transactionId || null,
+    });
 
   } catch (error) {
     console.error('Error sending household notification:', error);

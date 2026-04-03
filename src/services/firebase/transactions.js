@@ -13,21 +13,32 @@ import {
   orderBy,
   onSnapshot,
   getDocs,
+  setDoc,
   serverTimestamp,
   Timestamp,
   limit,
-  startAfter,
 } from 'firebase/firestore';
 import { db } from './config';
 import { logAppNotification } from './appNotifications';
 
 const TRANSACTIONS_COLLECTION = 'transactions';
+const buildTransactionDocId = (accountId, clientRequestId) => `tx_${accountId}_${clientRequestId}`;
 
 // ─── Add Transaction ─────────────────────────────────────────
 export const addTransaction = async (accountId, actor, transactionData) => {
   try {
+    console.log('[tx:add] request:start', {
+      accountId,
+      actorUid: actor?.uid,
+      clientRequestId: transactionData.clientRequestId || null,
+      type: transactionData.type,
+      amount: transactionData.amount,
+      categoryId: transactionData.categoryId,
+      date: transactionData.date,
+    });
+
     const now = serverTimestamp();
-    const docRef = await addDoc(collection(db, TRANSACTIONS_COLLECTION), {
+    const payload = {
       userId: actor.uid,
       householdId: accountId,
       createdByUid: actor.uid,
@@ -41,22 +52,51 @@ export const addTransaction = async (accountId, actor, transactionData) => {
       receiptUrl: transactionData.receiptUrl || null,
       tags: transactionData.tags || [],
       debtMeta: transactionData.debtMeta || null,
+      clientRequestId: transactionData.clientRequestId || null,
       createdAt: now,
       updatedAt: now,
-    });
+    };
+
+    let transactionId = null;
+    if (transactionData.clientRequestId) {
+      transactionId = buildTransactionDocId(accountId, transactionData.clientRequestId);
+      const ref = doc(db, TRANSACTIONS_COLLECTION, transactionId);
+      const existingDoc = await getDoc(ref);
+      if (existingDoc.exists()) {
+        console.log('[tx:add] request:dedup-hit', {
+          clientRequestId: transactionData.clientRequestId,
+          existingId: transactionId,
+        });
+        return { id: transactionId, error: null };
+      }
+
+      await setDoc(ref, payload);
+    } else {
+      const docRef = await addDoc(collection(db, TRANSACTIONS_COLLECTION), payload);
+      transactionId = docRef.id;
+    }
+
     await logAppNotification({
       userId: actor.uid,
       title: 'Transaksi baru ditambahkan',
       body: `${actor.displayName || actor.email || 'Member'} menambahkan ${transactionData.category} sebesar ${transactionData.amount}`,
       action: 'insert',
       entityType: 'transaction',
-      entityId: docRef.id,
+      entityId: transactionId,
       actorName: actor.displayName || actor.email || 'Member',
       actorUid: actor.uid,
       metadata: { householdId: accountId },
     });
-    return { id: docRef.id, error: null };
+    console.log('[tx:add] request:created', {
+      id: transactionId,
+      clientRequestId: transactionData.clientRequestId || null,
+    });
+    return { id: transactionId, error: null };
   } catch (error) {
+    console.log('[tx:add] request:error', {
+      clientRequestId: transactionData.clientRequestId || null,
+      message: error.message,
+    });
     return { id: null, error: error.message };
   }
 };
@@ -135,6 +175,20 @@ export const subscribeToTransactions = (accountId, callback, filters = {}) => {
       createdAt: doc.data().createdAt?.toDate?.()?.toISOString?.() || null,
       updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString?.() || null,
     }));
+    const duplicateClientRequestIds = transactions.reduce((acc, tx) => {
+      if (!tx.clientRequestId) return acc;
+      acc[tx.clientRequestId] = (acc[tx.clientRequestId] || 0) + 1;
+      return acc;
+    }, {});
+
+    console.log('[tx:subscribe] snapshot', {
+      accountId,
+      total: transactions.length,
+      ids: transactions.map((tx) => tx.id),
+      duplicateClientRequestIds: Object.entries(duplicateClientRequestIds)
+        .filter(([, count]) => count > 1)
+        .map(([clientRequestId, count]) => ({ clientRequestId, count })),
+    });
     callback(transactions);
   });
 };
@@ -187,7 +241,15 @@ export const getMonthlyReport = async (accountId, year, month) => {
 
   // Group by category
   const byCategory = transactions.reduce((acc, t) => {
-    if (!acc[t.categoryId]) acc[t.categoryId] = { name: t.category, total: 0, count: 0, type: t.type };
+    if (!acc[t.categoryId]) {
+      acc[t.categoryId] = {
+        categoryId: t.categoryId,
+        name: t.category,
+        total: 0,
+        count: 0,
+        type: t.type,
+      };
+    }
     acc[t.categoryId].total += t.amount;
     acc[t.categoryId].count += 1;
     return acc;

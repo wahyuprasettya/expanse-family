@@ -11,9 +11,17 @@ import MainNavigator from './MainNavigator';
 import PinScreen from '@screens/auth/PinScreen';
 import { useAppTheme } from '@hooks/useAppTheme';
 import { useAuth } from '@hooks/useAuth';
+import { useTransactionSync } from '@hooks/useTransactionSync';
+import { useCategorySync } from '@hooks/useCategorySync';
+import { useReminderSync } from '@hooks/useReminderSync';
+import { useLegacyCleanup } from '@hooks/useLegacyCleanup';
 
 export const AppNavigator = () => {
   const { isLoading } = useAuth();
+  useTransactionSync();
+  useCategorySync();
+  useReminderSync();
+  useLegacyCleanup();
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const isPinVerified = useSelector(selectIsPinVerified);
   const profile = useSelector(selectProfile);

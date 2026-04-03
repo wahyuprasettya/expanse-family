@@ -1,7 +1,7 @@
 // ============================================================
 // Reports Screen (Charts + Monthly Summary)
 // ============================================================
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions
 } from 'react-native';
@@ -11,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { PieChart } from 'react-native-chart-kit';
 import { useSelector } from 'react-redux';
 import { selectProfile, selectUser } from '@store/authSlice';
+import { selectAssets } from '@store/assetSlice';
+import { selectCategories } from '@store/categorySlice';
 import { getMonthlyReport } from '@services/firebase/transactions';
 import { formatCurrency, formatCurrencyCompact, formatDate } from '@utils/formatters';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
@@ -27,12 +29,30 @@ export const ReportsScreen = () => {
   const styles = createStyles(colors);
   const user = useSelector(selectUser);
   const profile = useSelector(selectProfile);
+  const assets = useSelector(selectAssets);
+  const categories = useSelector(selectCategories);
   const accountId = profile?.householdId || user?.uid;
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Asset calculations
+  const assetRows = useMemo(() => assets.map((asset) => {
+    const qty = Number(asset.quantity) || 0;
+    const buyPrice = Number(asset.buyPrice) || 0;
+    const currentPrice = Number(asset.currentPrice) || 0;
+    const cost = qty * buyPrice;
+    const value = qty * currentPrice;
+    const profit = value - cost;
+    const profitPct = cost > 0 ? (profit / cost) * 100 : 0;
+    return { ...asset, qty, buyPrice, currentPrice, cost, value, profit, profitPct };
+  }), [assets]);
+
+  const totalAssetValue = assetRows.reduce((sum, item) => sum + item.value, 0);
+  const totalAssetCost = assetRows.reduce((sum, item) => sum + item.cost, 0);
+  const totalAssetProfit = totalAssetValue - totalAssetCost;
 
   const fetchReport = async () => {
     if (!accountId) return;
@@ -56,11 +76,56 @@ export const ReportsScreen = () => {
     decimalPlaces: 0,
   };
 
-  const pieData = report?.byCategory
+  const assetPieData = assetRows
+    ?.filter((asset) => asset.value > 0)
+    ?.sort((a, b) => b.value - a.value)
+    ?.slice(0, 6)
+    ?.map((asset, index) => {
+      const translatedType = asset.type ? t(`assets.types.${asset.type}`) : '';
+      const fallbackName = asset.name.length > 8 ? asset.name.substring(0, 8) + '...' : asset.name;
+      const displayName = translatedType && translatedType !== `assets.types.${asset.type}`
+        ? translatedType
+        : fallbackName;
+
+      return {
+        name: displayName,
+        value: asset.value,
+        color: colors.chart[index % colors.chart.length],
+        legendFontColor: colors.textSecondary,
+        legendFontSize: 12,
+      };
+    }) || [];
+
+  const getCategoryDisplayName = (category) => {
+    if (category?.isDefault && category?.id) {
+      const translatedName = t(`categories.names.${category.id}`);
+      return translatedName !== `categories.names.${category.id}` ? translatedName : category.name;
+    }
+    return category?.name || '';
+  };
+
+  const categoryMap = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories]
+  );
+
+  const reportCategories = useMemo(
+    () => (report?.byCategory || []).map((category) => {
+      const categoryFromStore = categoryMap.get(category.categoryId);
+
+      return {
+        ...category,
+        displayName: getCategoryDisplayName(categoryFromStore) || category.name,
+      };
+    }),
+    [report?.byCategory, categoryMap, t]
+  );
+
+  const pieData = reportCategories
     ?.filter((category) => category.type === 'expense' || category.type === 'debt')
     ?.slice(0, 6)
     ?.map((category, index) => ({
-      name: category.name.split(' ')[0],
+      name: category.displayName.split(' ')[0],
       amount: category.total,
       color: colors.chart[index % colors.chart.length],
       legendFontColor: colors.textSecondary,
@@ -71,7 +136,15 @@ export const ReportsScreen = () => {
     if (!report) return;
 
     if (format === 'csv') {
-      await exportToCSV(report.transactions, `transactions_${selectedYear}_${selectedMonth}`);
+      await exportToCSV(report.transactions, {
+        income: report.income,
+        expense: report.expense,
+        balance: report.balance,
+        assets: assetRows,
+        totalAssetValue,
+        totalAssetCost,
+        totalAssetProfit,
+      }, `transactions_${selectedYear}_${selectedMonth}`, language);
       return;
     }
 
@@ -79,7 +152,11 @@ export const ReportsScreen = () => {
       income: report.income,
       expense: report.expense,
       balance: report.balance,
-    }, `report_${selectedYear}_${selectedMonth}`);
+      assets: assetRows,
+      totalAssetValue,
+      totalAssetCost,
+      totalAssetProfit,
+    }, `report_${selectedYear}_${selectedMonth}`, language);
   };
 
   return (
@@ -151,6 +228,75 @@ export const ReportsScreen = () => {
             </Text>
           </View>
 
+          <View style={styles.sectionSeparator} />
+
+          {assets.length > 0 && (
+            <LinearGradient colors={colors.gradients.header} style={styles.assetCard}>
+              <View style={styles.assetCardHeader}>
+                <View>
+                  <Text style={styles.assetEyebrow}>{t('assets.portfolioBreakdown')}</Text>
+                  <Text style={styles.assetTitle}>{t('assets.portfolioValue')}</Text>
+                </View>
+                <View style={[styles.assetPerformanceBadge, { backgroundColor: `${totalAssetProfit >= 0 ? colors.income : colors.expense}20` }]}>
+                  <Ionicons
+                    name={totalAssetProfit >= 0 ? 'trending-up' : 'trending-down'}
+                    size={14}
+                    color={totalAssetProfit >= 0 ? colors.income : colors.expense}
+                  />
+                  <Text style={[styles.assetPerformanceText, { color: totalAssetProfit >= 0 ? colors.income : colors.expense }]}>
+                    {totalAssetCost > 0 ? `${(totalAssetProfit / totalAssetCost * 100).toFixed(1)}%` : '0%'}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.assetHeroValue}>{formatCurrency(totalAssetValue, 'IDR', language)}</Text>
+              <Text style={styles.assetHeroSubtext}>
+                {t('assets.totalGain')} {totalAssetProfit >= 0 ? '+' : ''}{formatCurrency(totalAssetProfit, 'IDR', language)}
+              </Text>
+
+              <View style={styles.assetSummaryGrid}>
+                <View style={[styles.assetSummaryItem, styles.assetSummaryItemAccent]}>
+                  <Text style={styles.assetSummaryLabel}>{t('assets.totalValue')}</Text>
+                  <Text style={styles.assetSummaryValue}>{formatCurrency(totalAssetValue, 'IDR', language)}</Text>
+                </View>
+                <View style={styles.assetSummaryItem}>
+                  <Text style={styles.assetSummaryLabel}>{t('assets.totalCost')}</Text>
+                  <Text style={styles.assetSummaryValue}>{formatCurrency(totalAssetCost, 'IDR', language)}</Text>
+                </View>
+                <View style={styles.assetSummaryItem}>
+                  <Text style={[styles.assetSummaryLabel, { color: totalAssetProfit >= 0 ? colors.income : colors.expense }]}>
+                    {t('assets.totalGain')}
+                  </Text>
+                  <Text style={[styles.assetSummaryValue, { color: totalAssetProfit >= 0 ? colors.income : colors.expense }]}>
+                    {totalAssetProfit >= 0 ? '+' : ''}{formatCurrency(totalAssetProfit, 'IDR', language)}
+                  </Text>
+                </View>
+                <View style={styles.assetSummaryItem}>
+                  <Text style={styles.assetSummaryLabel}>ROI</Text>
+                  <Text style={[styles.assetSummaryValue, { color: totalAssetProfit >= 0 ? colors.income : colors.expense }]}>
+                    {totalAssetCost > 0 ? `${(totalAssetProfit / totalAssetCost * 100).toFixed(1)}%` : '0%'}
+                  </Text>
+                </View>
+              </View>
+            </LinearGradient>
+          )}
+
+          {assetPieData.length > 0 && (
+            <View style={styles.chartCard}>
+              <Text style={styles.chartTitle}>📊 {t('assets.portfolioBreakdown')}</Text>
+              <PieChart
+                data={assetPieData}
+                width={CHART_WIDTH}
+                height={200}
+                chartConfig={chartConfig}
+                accessor="value"
+                backgroundColor="transparent"
+                paddingLeft="10"
+                absolute={false}
+              />
+            </View>
+          )}
+
           {pieData.length > 0 && (
             <View style={styles.chartCard}>
               <Text style={styles.chartTitle}>💸 {t('reports.expenseBreakdown')}</Text>
@@ -167,34 +313,37 @@ export const ReportsScreen = () => {
             </View>
           )}
 
-          {report?.byCategory?.length > 0 && (
-            <View style={styles.categoryBreakdown}>
-              <Text style={styles.chartTitle}>📋 {t('reports.categoryBreakdown')}</Text>
-              {report.byCategory.sort((a, b) => b.total - a.total).map((category, index) => {
-                const total = category.type === 'income' ? report.income : report.expense;
-                const percentage = total > 0 ? (category.total / total) * 100 : 0;
+          {reportCategories.length > 0 && (
+            <>
+              <View style={styles.sectionSeparator} />
+              <View style={styles.categoryBreakdown}>
+                <Text style={styles.chartTitle}>📋 {t('reports.categoryBreakdown')}</Text>
+                {reportCategories.slice().sort((a, b) => b.total - a.total).map((category, index) => {
+                  const total = category.type === 'income' ? report.income : report.expense;
+                  const percentage = total > 0 ? (category.total / total) * 100 : 0;
 
-                return (
-                  <View key={index} style={styles.categoryRow}>
-                    <View style={styles.categoryRowLeft}>
-                      <View style={[styles.categoryDot, { backgroundColor: colors.chart[index % colors.chart.length] }]} />
-                      <Text style={styles.categoryRowName}>{category.name}</Text>
-                      <Text style={styles.categoryRowCount}>({category.count}x)</Text>
+                  return (
+                    <View key={index} style={styles.categoryRow}>
+                      <View style={styles.categoryRowLeft}>
+                        <View style={[styles.categoryDot, { backgroundColor: colors.chart[index % colors.chart.length] }]} />
+                        <Text style={styles.categoryRowName}>{category.displayName}</Text>
+                        <Text style={styles.categoryRowCount}>({category.count}x)</Text>
+                      </View>
+                      <View style={styles.categoryRowRight}>
+                        <Text style={[
+                          styles.categoryRowAmount,
+                          { color: category.type === 'income' ? colors.income : colors.expense },
+                        ]}>
+                          {formatCurrency(category.total, 'IDR', language)}
+                        </Text>
+                        <Text style={styles.categoryRowPct}>{Math.round(percentage)}%</Text>
+                      </View>
                     </View>
-                    <View style={styles.categoryRowRight}>
-                      <Text style={[
-                        styles.categoryRowAmount,
-                        { color: category.type === 'income' ? colors.income : colors.expense },
-                      ]}>
-                        {formatCurrency(category.total, 'IDR', language)}
-                      </Text>
-                      <Text style={styles.categoryRowPct}>{Math.round(percentage)}%</Text>
-                    </View>
-                  </View>
-                );
-              })}
+                  );
+                })}
 
-            </View>
+              </View>
+            </>
           )}
 
           {!report && !loading && (
@@ -268,6 +417,12 @@ const createStyles = (colors) => StyleSheet.create({
   },
   balanceRowLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, marginBottom: 4 },
   balanceRowValue: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
+  sectionSeparator: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: SPACING.lg,
+    opacity: 0.5,
+  },
   chartCard: {
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.lg,
@@ -277,6 +432,68 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: colors.border,
   },
   chartTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.semibold, marginBottom: SPACING.md },
+  assetCard: {
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.xl,
+    marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: `${colors.primary}30`,
+    overflow: 'hidden',
+    ...SHADOWS.md,
+  },
+  assetCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  assetEyebrow: {
+    color: colors.textMuted,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.medium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  assetTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, marginTop: 4 },
+  assetPerformanceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.full,
+  },
+  assetPerformanceText: { fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.semibold },
+  assetHeroValue: {
+    color: colors.textPrimary,
+    fontSize: FONT_SIZE.xxxl,
+    fontFamily: FONT_FAMILY.extrabold,
+    letterSpacing: -1,
+  },
+  assetHeroSubtext: {
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.medium,
+    marginTop: 6,
+    marginBottom: SPACING.lg,
+  },
+  assetSummaryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: SPACING.sm },
+  assetSummaryItem: {
+    width: '48%',
+    backgroundColor: colors.overlayLight,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: `${colors.border}CC`,
+    marginBottom: 0,
+  },
+  assetSummaryItemAccent: {
+    borderColor: `${colors.primary}35`,
+    backgroundColor: `${colors.primary}12`,
+  },
+  assetSummaryLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginBottom: 6 },
+  assetSummaryValue: { color: colors.textPrimary, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.bold },
   categoryBreakdown: {
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.lg,

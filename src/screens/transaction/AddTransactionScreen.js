@@ -1,7 +1,7 @@
 // ============================================================
 // Add Transaction Screen
 // ============================================================
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   KeyboardAvoidingView, Platform, Alert, FlatList, Modal
@@ -46,7 +46,17 @@ export const AddTransactionScreen = ({ navigation, route }) => {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const isSubmittingRef = useRef(false);
+  const submissionKeyRef = useRef(null);
   const isDebt = type === 'debt';
+
+  const getCategoryDisplayName = (category) => {
+    if (category?.isDefault && category?.id) {
+      const translatedName = t(`categories.names.${category.id}`);
+      return translatedName !== `categories.names.${category.id}` ? translatedName : category.name;
+    }
+    return category?.name || '';
+  };
 
   const filteredCategories = useMemo(() => categories.filter((category) => {
     if (isDebt) return category.type === 'expense' || category.type === 'both' || category.id === 'debt';
@@ -91,27 +101,47 @@ export const AddTransactionScreen = ({ navigation, route }) => {
   };
 
   const handleSubmit = async () => {
+    if (loading || isSubmittingRef.current) return;
     if (!validate()) return;
-    setLoading(true);
-    const { error } = await addTransaction({
-      amount: parseAmount(amount),
+    if (!submissionKeyRef.current) {
+      submissionKeyRef.current = `tx-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+    console.log('[AddTransactionScreen] submit', {
+      clientRequestId: submissionKeyRef.current,
       type,
-      category: selectedCategory.name,
-      categoryId: selectedCategory.id,
-      categoryIcon: selectedCategory.icon,
-      categoryColor: selectedCategory.color,
-      description: description.trim(),
-      date: date.toISOString(),
-      debtMeta: isDebt ? {
-        creditorName: creditorName.trim(),
-        dueDate: dueDate.toISOString(),
-        remindDaysBefore: parseInt(remindDaysBefore, 10) || 3,
-      } : null,
+      amount,
+      categoryId: selectedCategory?.id || null,
     });
-    setLoading(false);
+    isSubmittingRef.current = true;
+    setLoading(true);
+    let error = null;
+    try {
+      const result = await addTransaction({
+        amount: parseAmount(amount),
+        type,
+        category: getCategoryDisplayName(selectedCategory),
+        categoryId: selectedCategory.id,
+        categoryIcon: selectedCategory.icon,
+        categoryColor: selectedCategory.color,
+        clientRequestId: submissionKeyRef.current,
+        description: description.trim(),
+        date: date.toISOString(),
+        debtMeta: isDebt ? {
+          creditorName: creditorName.trim(),
+          dueDate: dueDate.toISOString(),
+          remindDaysBefore: parseInt(remindDaysBefore, 10) || 3,
+        } : null,
+      });
+      error = result?.error || null;
+    } finally {
+      isSubmittingRef.current = false;
+      setLoading(false);
+    }
+
     if (error) {
       Alert.alert('Error', error);
     } else {
+      submissionKeyRef.current = null;
       navigation.goBack();
     }
   };
@@ -180,7 +210,7 @@ export const AddTransactionScreen = ({ navigation, route }) => {
               {selectedCategory ? (
                 <View style={styles.selectedCategory}>
                   <Text style={styles.selectedCategoryIcon}>{selectedCategory.icon}</Text>
-                  <Text style={styles.selectedCategoryName}>{selectedCategory.name}</Text>
+                  <Text style={styles.selectedCategoryName}>{getCategoryDisplayName(selectedCategory)}</Text>
                 </View>
               ) : (
                 <Text style={styles.categoryPlaceholder}>{t('addTransaction.selectCategory')}</Text>
@@ -299,7 +329,7 @@ export const AddTransactionScreen = ({ navigation, route }) => {
                     onPress={() => { setSelectedCategory(item); setShowCategoryModal(false); }}
                   >
                     <Text style={styles.categoryItemIcon}>{item.icon}</Text>
-                    <Text style={styles.categoryItemName} numberOfLines={2}>{item.name}</Text>
+                    <Text style={styles.categoryItemName} numberOfLines={2}>{getCategoryDisplayName(item)}</Text>
                   </TouchableOpacity>
                 )}
               />
@@ -322,7 +352,7 @@ const createStyles = (colors) => StyleSheet.create({
     paddingVertical: SPACING.md,
   },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
+  headerTitle: { fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
   content: { padding: SPACING.lg },
   typeToggle: {
     flexDirection: 'row',
@@ -344,7 +374,7 @@ const createStyles = (colors) => StyleSheet.create({
     fontFamily: FONT_FAMILY.medium,
     color: colors.textMuted,
   },
-  typeBtnTextActive: { color: '#FFFFFF', fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
+  typeBtnTextActive: { color: '#FFFFFF', fontFamily: FONT_FAMILY.bold },
   amountContainer: { marginBottom: SPACING.lg },
   amountLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontWeight: '500', fontFamily: FONT_FAMILY.medium, marginBottom: 6 },
   amountInput: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },

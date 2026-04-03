@@ -10,6 +10,17 @@ import { DEFAULT_CATEGORIES } from '@constants/categories';
 
 const CATEGORIES_COLLECTION = 'categories';
 
+const serializeCategory = (docSnapshot) => {
+  const data = docSnapshot.data();
+
+  return {
+    id: docSnapshot.id,
+    ...data,
+    createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
+    isCustom: true,
+  };
+};
+
 // ─── Subscribe to User Categories ────────────────────────────
 export const subscribeToCategories = (userId, callback) => {
   const q = query(
@@ -18,7 +29,7 @@ export const subscribeToCategories = (userId, callback) => {
   );
 
   return onSnapshot(q, (snapshot) => {
-    const custom = snapshot.docs.map((d) => ({ id: d.id, ...d.data(), isCustom: true }));
+    const custom = snapshot.docs.map(serializeCategory);
     callback([...DEFAULT_CATEGORIES, ...custom]);
   });
 };

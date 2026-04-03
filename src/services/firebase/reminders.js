@@ -3,13 +3,47 @@
 // ============================================================
 import {
   collection, addDoc, updateDoc, deleteDoc, doc,
-  query, where, onSnapshot, serverTimestamp, Timestamp, getDocs, getDoc,
+  query, where, onSnapshot, serverTimestamp, getDocs, getDoc,
 } from 'firebase/firestore';
 import { db } from './config';
 import { logAppNotification } from './appNotifications';
 import * as Notifications from 'expo-notifications';
 
 const REMINDERS_COLLECTION = 'reminders';
+
+const serializeReminder = (docSnapshot) => {
+  const data = docSnapshot.data();
+
+  return {
+    id: docSnapshot.id,
+    ...data,
+    dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : null,
+    createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
+    updatedAt: data.updatedAt?.toDate?.().toISOString?.() || null,
+  };
+};
+
+const resolveReminderTriggerDate = (reminder) => {
+  const dueDate = new Date(reminder.dueDate);
+  if (Number.isNaN(dueDate.getTime())) return null;
+
+  const triggerDate = new Date(dueDate);
+  triggerDate.setDate(triggerDate.getDate() - (reminder.daysBefore || 1));
+  triggerDate.setHours(9, 0, 0, 0);
+
+  const now = new Date();
+  if (dueDate <= now) {
+    return null;
+  }
+
+  if (triggerDate <= now) {
+    const fallbackTrigger = new Date(now.getTime() + 60 * 1000);
+    fallbackTrigger.setSeconds(0, 0);
+    return fallbackTrigger;
+  }
+
+  return triggerDate;
+};
 
 const cancelNotificationIfNeeded = async (notificationId) => {
   if (!notificationId) return;
@@ -22,9 +56,7 @@ const cancelNotificationIfNeeded = async (notificationId) => {
 
 // ─── Schedule Notification ───────────────────────────────────
 export const scheduleReminderNotification = async (reminder, t) => {
-  const triggerDate = new Date(reminder.dueDate);
-  triggerDate.setDate(triggerDate.getDate() - (reminder.daysBefore || 1));
-  triggerDate.setHours(9, 0, 0, 0);
+  const triggerDate = resolveReminderTriggerDate(reminder);
 
   const isDebtReminder = reminder.reminderType === 'debt';
   const title = isDebtReminder
@@ -42,7 +74,7 @@ export const scheduleReminderNotification = async (reminder, t) => {
         amount: reminder.amount,
       });
 
-  if (triggerDate > new Date()) {
+  if (triggerDate) {
     const notifId = await Notifications.scheduleNotificationAsync({
       content: {
         title,
@@ -217,10 +249,7 @@ export const subscribeToReminders = (userId, callback) => {
   );
 
   return onSnapshot(q, (snapshot) => {
-    const reminders = snapshot.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    }));
+    const reminders = snapshot.docs.map(serializeReminder);
     callback(reminders);
   });
 };
@@ -243,9 +272,9 @@ export const syncDebtReminder = async ({
   const snapshot = await getDocs(q);
   const existing = snapshot.docs[0];
   const payload = {
-    name: `Bayar hutang ${creditorName || category}`,
+    name: t('reminders.debtReminderName', { name: creditorName || category }),
     amount,
-    category: 'Debt Payment',
+    category: t('reminders.debtPaymentCategory'),
     dueDate,
     daysBefore: remindDaysBefore,
     isRecurring: false,
