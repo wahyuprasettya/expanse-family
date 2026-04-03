@@ -4,7 +4,8 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { subscribeToCategories } from '@services/firebase/categories';
-import { setCategories } from '@store/categorySlice';
+import { setCategories, setLoading } from '@store/categorySlice';
+import { DEFAULT_CATEGORIES } from '@constants/categories';
 import { selectUser } from '@store/authSlice';
 
 export const useCategorySync = () => {
@@ -12,10 +13,16 @@ export const useCategorySync = () => {
   const user = useSelector(selectUser);
 
   useEffect(() => {
-    if (!user?.uid) return undefined;
+    if (!user?.uid) {
+      dispatch(setCategories(DEFAULT_CATEGORIES));
+      dispatch(setLoading(false));
+      return undefined;
+    }
 
+    dispatch(setLoading(true));
     const unsubscribe = subscribeToCategories(user.uid, (categories) => {
       dispatch(setCategories(categories));
+      dispatch(setLoading(false));
     });
 
     return () => {

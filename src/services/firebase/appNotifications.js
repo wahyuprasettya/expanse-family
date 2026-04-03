@@ -1,7 +1,7 @@
 // ============================================================
 // Firestore App Notifications Service
 // ============================================================
-import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from './config';
 
 const APP_NOTIFICATIONS_COLLECTION = 'appNotifications';
@@ -74,5 +74,28 @@ export const deleteAppNotification = async (notificationId) => {
     return { error: null };
   } catch (error) {
     return { error: error.message };
+  }
+};
+
+export const deleteAllAppNotifications = async (userId) => {
+  if (!userId) return { error: 'userId is required' };
+
+  try {
+    const snapshot = await getDocs(query(
+      collection(db, APP_NOTIFICATIONS_COLLECTION),
+      where('userId', '==', userId)
+    ));
+
+    if (snapshot.empty) {
+      return { error: null, deletedCount: 0 };
+    }
+
+    const batch = writeBatch(db);
+    snapshot.docs.forEach((notifDoc) => batch.delete(notifDoc.ref));
+    await batch.commit();
+
+    return { error: null, deletedCount: snapshot.size };
+  } catch (error) {
+    return { error: error.message, deletedCount: 0 };
   }
 };

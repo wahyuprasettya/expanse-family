@@ -1,33 +1,31 @@
 // ============================================================
-// useReminderSync Hook
+// useAssetSync Hook
 // ============================================================
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { subscribeToReminders } from '@services/firebase/reminders';
-import { setLoading, setReminders } from '@store/reminderSlice';
 import { selectUser } from '@store/authSlice';
+import { setAssets, setLoading } from '@store/assetSlice';
+import { subscribeToAssets } from '@services/firebase/assets';
 
-export const useReminderSync = () => {
+export const useAssetSync = () => {
   const dispatch = useDispatch();
   const user = useSelector(selectUser);
 
   useEffect(() => {
     if (!user?.uid) {
-      dispatch(setReminders([]));
+      dispatch(setAssets([]));
       dispatch(setLoading(false));
       return undefined;
     }
 
     dispatch(setLoading(true));
-    const unsubscribe = subscribeToReminders(user.uid, (reminders) => {
-      dispatch(setReminders(reminders));
+    const unsubscribe = subscribeToAssets(user.uid, (remoteAssets) => {
+      dispatch(setAssets(remoteAssets));
       dispatch(setLoading(false));
     });
 
-    return () => {
-      unsubscribe();
-    };
+    return unsubscribe;
   }, [dispatch, user?.uid]);
 };
 
-export default useReminderSync;
+export default useAssetSync;

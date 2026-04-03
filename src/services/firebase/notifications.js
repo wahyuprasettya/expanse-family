@@ -3,10 +3,16 @@
 // ============================================================
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs, getDoc } from 'firebase/firestore';
 import { db } from './config';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+
+const NOTIFICATION_CHANNELS = {
+  default: 'default',
+  transactions: 'transactions',
+  reminders: 'reminders',
+};
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -38,21 +44,21 @@ export const registerForPushNotifications = async (userId) => {
   }
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
+    await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.default, {
       name: 'Default',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#6366F1',
     });
 
-    await Notifications.setNotificationChannelAsync('transactions', {
+    await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.transactions, {
       name: 'Transactions',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250],
       lightColor: '#10B981',
     });
 
-    await Notifications.setNotificationChannelAsync('reminders', {
+    await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.reminders, {
       name: 'Bill Reminders',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 500, 250, 500],
@@ -96,8 +102,51 @@ export const sendTransactionNotification = async (transaction) => {
       data: { transactionId: transaction.id, type: 'transaction' },
       sound: 'default',
     },
-    trigger: null, // Immediate
+    trigger: null,
   });
+};
+
+export const sendPushNotificationToUser = async (userId, notification) => {
+  if (!userId) {
+    return;
+  }
+
+  try {
+    const userSnapshot = await getDoc(doc(db, 'users', userId));
+    if (!userSnapshot.exists()) {
+      return;
+    }
+
+    const userData = userSnapshot.data();
+    if (!userData?.expoPushToken) {
+      return;
+    }
+
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: userData.expoPushToken,
+        title: notification.title,
+        body: notification.body,
+        data: notification.data || {},
+        sound: 'default',
+        channelId: notification.channelId || NOTIFICATION_CHANNELS.default,
+        priority: 'default',
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('Failed to send direct push notification:', errorData);
+    } else {
+      await response.json();
+    }
+  } catch (error) {
+    console.error('Error sending direct push notification:', error);
+  }
 };
 
 // ─── Send Budget Warning Notification ────────────────────────
@@ -150,6 +199,7 @@ export const sendHouseholdNotification = async (householdId, senderUid, notifica
       body: notification.body,
       data: notification.data || {},
       sound: 'default',
+      channelId: notification.channelId || NOTIFICATION_CHANNELS.transactions,
       priority: 'default',
     }));
 

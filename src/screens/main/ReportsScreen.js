@@ -11,14 +11,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { PieChart } from 'react-native-chart-kit';
 import { useSelector } from 'react-redux';
 import { selectProfile, selectUser } from '@store/authSlice';
-import { selectAssets } from '@store/assetSlice';
-import { selectCategories } from '@store/categorySlice';
+import { selectAssets, selectAssetsLoading } from '@store/assetSlice';
+import { selectCategories, selectCategoriesLoading } from '@store/categorySlice';
 import { getMonthlyReport } from '@services/firebase/transactions';
 import { formatCurrency, formatCurrencyCompact, formatDate } from '@utils/formatters';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { exportToCSV, exportToPDF } from '@services/export';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
+import LoadingState from '@components/common/LoadingState';
 
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - SPACING.lg * 2;
@@ -30,7 +31,9 @@ export const ReportsScreen = () => {
   const user = useSelector(selectUser);
   const profile = useSelector(selectProfile);
   const assets = useSelector(selectAssets);
+  const assetsLoading = useSelector(selectAssetsLoading);
   const categories = useSelector(selectCategories);
+  const categoriesLoading = useSelector(selectCategoriesLoading);
   const accountId = profile?.householdId || user?.uid;
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -159,6 +162,8 @@ export const ReportsScreen = () => {
     }, `report_${selectedYear}_${selectedMonth}`, language);
   };
 
+  const showInitialLoading = (loading || assetsLoading || categoriesLoading) && !report;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={true}>
@@ -177,6 +182,10 @@ export const ReportsScreen = () => {
         </LinearGradient>
 
         <View style={styles.content}>
+          {showInitialLoading ? (
+            <LoadingState compact />
+          ) : (
+            <>
           <View style={styles.periodPicker}>
             <TouchableOpacity
               onPress={() => {
@@ -351,6 +360,8 @@ export const ReportsScreen = () => {
               <Text style={styles.emptyIcon}>📊</Text>
               <Text style={styles.emptyText}>{t('reports.noData')}</Text>
             </View>
+          )}
+            </>
           )}
         </View>
       </ScrollView>

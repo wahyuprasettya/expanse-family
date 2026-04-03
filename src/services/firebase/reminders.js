@@ -8,8 +8,10 @@ import {
 import { db } from './config';
 import { logAppNotification } from './appNotifications';
 import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 
 const REMINDERS_COLLECTION = 'reminders';
+const REMINDER_CHANNEL_ID = 'reminders';
 
 const serializeReminder = (docSnapshot) => {
   const data = docSnapshot.data();
@@ -81,7 +83,9 @@ export const scheduleReminderNotification = async (reminder, t) => {
         body,
         data: { reminderId: reminder.id, type: reminder.reminderType || 'bill' },
       },
-      trigger: { date: triggerDate },
+      trigger: Platform.OS === 'android'
+        ? { date: triggerDate, channelId: REMINDER_CHANNEL_ID }
+        : { date: triggerDate },
     });
     return notifId;
   }

@@ -9,10 +9,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSelector } from 'react-redux';
-import { selectTransactions } from '@store/transactionSlice';
+import { selectTransactions, selectTransactionsLoading } from '@store/transactionSlice';
 import { selectCategories } from '@store/categorySlice';
 import { useTransactions } from '@hooks/useTransactions';
 import TransactionCard from '@components/transaction/TransactionCard';
+import LoadingState from '@components/common/LoadingState';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING } from '@constants/theme';
 import { formatDate } from '@utils/formatters';
 import { useTranslation } from '@hooks/useTranslation';
@@ -23,6 +24,7 @@ export const TransactionsScreen = ({ navigation }) => {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
   const transactions = useSelector(selectTransactions);
+  const transactionsLoading = useSelector(selectTransactionsLoading);
   const categories = useSelector(selectCategories);
   const { deleteTransaction } = useTransactions();
   const TYPE_FILTERS = [
@@ -98,6 +100,20 @@ export const TransactionsScreen = ({ navigation }) => {
       ))}
     </View>
   );
+
+  if (transactionsLoading && transactions.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LinearGradient colors={colors.gradients.header} style={styles.header}>
+          <Text style={styles.title}>{t('transactions.title')}</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('AddTransaction')} style={styles.addBtn}>
+            <Ionicons name="add" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        </LinearGradient>
+        <LoadingState />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

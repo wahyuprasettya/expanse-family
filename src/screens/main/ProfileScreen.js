@@ -18,7 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useSelector, useDispatch } from "react-redux";
-import { selectUser, selectProfile, setProfile } from "@store/authSlice";
+import { selectUser, selectProfile, setProfile, setUser, logout as clearAuthState } from "@store/authSlice";
 import { updateUserProfile } from "../../services/firebase/users";
 import {
   selectLanguage,
@@ -26,7 +26,6 @@ import {
   setLanguage,
   setTheme,
 } from "@store/uiSlice";
-import { useAuth } from "@hooks/useAuth";
 import { useTranslation } from "@hooks/useTranslation";
 import { saveLanguagePreference } from "@services/language";
 import {
@@ -41,6 +40,7 @@ import {
   updateThemePreference,
   updateBiometricEnabled,
 } from "@services/firebase/users";
+import { logoutUser } from "@services/firebase/auth";
 import { useAppTheme } from "@hooks/useAppTheme";
 import { useBiometric } from "@hooks/useBiometric";
 import { updateProfile } from "firebase/auth";
@@ -89,18 +89,28 @@ export const ProfileScreen = ({ navigation }) => {
   const profile = useSelector(selectProfile);
   const activeLanguage = useSelector(selectLanguage);
   const activeTheme = useSelector(selectTheme);
-  const { logout } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const { isBiometricSupported } = useBiometric();
   const [showEditModal, setShowEditModal] = useState(false);
   const [editName, setEditName] = useState(user?.displayName || "");
   const [editEmail, setEditEmail] = useState(user?.email || "");
   const [loading, setLoading] = useState(false);
+  const notAuthenticatedMessage = language === "en" ? "Please sign in again." : "Silakan login kembali.";
+
+  const handleConfirmLogout = async () => {
+    const { error } = await logoutUser();
+    if (!error) {
+      dispatch(clearAuthState());
+      return;
+    }
+
+    Alert.alert(t("common.error"), error);
+  };
 
   const handleLogout = () => {
     Alert.alert(t("profile.signOutTitle"), t("profile.signOutMessage"), [
       { text: t("common.cancel"), style: "cancel" },
-      { text: t("profile.signOut"), style: "destructive", onPress: logout },
+      { text: t("profile.signOut"), style: "destructive", onPress: handleConfirmLogout },
     ]);
   };
 
@@ -223,16 +233,23 @@ export const ProfileScreen = ({ navigation }) => {
       return;
     }
 
+    if (!user?.uid || !auth.currentUser) {
+      Alert.alert(t("common.error"), notAuthenticatedMessage);
+      return;
+    }
+
+    const nextDisplayName = editName.trim();
+
     setLoading(true);
     try {
       // Update Firebase Auth
       await updateProfile(auth.currentUser, {
-        displayName: editName.trim(),
+        displayName: nextDisplayName,
       });
 
       // Update Firestore
       const { error } = await updateUserProfile(user.uid, {
-        displayName: editName.trim(),
+        displayName: nextDisplayName,
       });
 
       if (error) {
@@ -240,8 +257,12 @@ export const ProfileScreen = ({ navigation }) => {
         return;
       }
 
-      // Update local state
-      dispatch(setProfile({ ...profile, displayName: editName.trim() }));
+      // Keep auth and profile state in sync so the new name appears immediately.
+      dispatch(setUser({
+        ...user,
+        displayName: nextDisplayName,
+      }));
+      dispatch(setProfile(profile ? { ...profile, displayName: nextDisplayName } : { displayName: nextDisplayName }));
 
       setShowEditModal(false);
       Alert.alert(t("common.success"), t("profile.profileUpdated"));

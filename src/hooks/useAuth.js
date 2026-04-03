@@ -18,25 +18,30 @@ export const useAuth = () => {
 
   useEffect(() => {
     const unsubscribe = subscribeToAuthChanges(async (firebaseUser) => {
-      dispatch(setUser(firebaseUser));
-      if (firebaseUser) {
-        const { profile } = await getUserProfile(firebaseUser.uid);
-        const { updates } = await ensureHouseholdProfile({
-          userId: firebaseUser.uid,
-          profile,
-          fallbackName: firebaseUser.displayName,
-        });
-        const mergedProfile = updates ? { ...profile, ...updates } : profile;
+      dispatch(setLoading(true));
+      try {
+        dispatch(setUser(firebaseUser));
+        if (firebaseUser) {
+          const { profile } = await getUserProfile(firebaseUser.uid);
+          const { updates } = await ensureHouseholdProfile({
+            userId: firebaseUser.uid,
+            profile,
+            fallbackName: firebaseUser.displayName,
+          });
+          const mergedProfile = updates ? { ...profile, ...updates } : profile;
 
-        dispatch(setProfile(mergedProfile));
-        dispatch(setTheme(mergedProfile?.theme || 'system'));
-        dispatch(setLanguage(mergedProfile?.language || getDeviceLanguage()));
-        // Register push notifications
-        await registerForPushNotifications(firebaseUser.uid);
-      } else {
-        dispatch(setProfile(null));
-        dispatch(setTheme('system'));
-        dispatch(setLanguage(getDeviceLanguage()));
+          dispatch(setProfile(mergedProfile));
+          dispatch(setTheme(mergedProfile?.theme || 'system'));
+          dispatch(setLanguage(mergedProfile?.language || getDeviceLanguage()));
+          // Register push notifications
+          await registerForPushNotifications(firebaseUser.uid);
+        } else {
+          dispatch(setProfile(null));
+          dispatch(setTheme('system'));
+          dispatch(setLanguage(getDeviceLanguage()));
+        }
+      } finally {
+        dispatch(setLoading(false));
       }
     });
 

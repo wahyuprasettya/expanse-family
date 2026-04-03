@@ -4,7 +4,7 @@
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { subscribeToTransactions } from '@services/firebase/transactions';
-import { setTransactions } from '@store/transactionSlice';
+import { setLoading, setTransactions } from '@store/transactionSlice';
 import { selectProfile, selectUser } from '@store/authSlice';
 
 export const useTransactionSync = () => {
@@ -16,11 +16,14 @@ export const useTransactionSync = () => {
   useEffect(() => {
     if (!accountId) {
       dispatch(setTransactions([]));
+      dispatch(setLoading(false));
       return undefined;
     }
 
+    dispatch(setLoading(true));
     const unsubscribe = subscribeToTransactions(accountId, (txs) => {
       dispatch(setTransactions(txs));
+      dispatch(setLoading(false));
     });
 
     return () => {

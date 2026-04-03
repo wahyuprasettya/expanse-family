@@ -1,7 +1,7 @@
 // ============================================================
 // Assets Screen
 // ============================================================
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, TextInput, Alert, FlatList
 } from 'react-native';
@@ -12,9 +12,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
 import { useTranslation } from '@hooks/useTranslation';
-import { addAssetLocal, removeAssetLocal, selectAssets, setAssets } from '@store/assetSlice';
-import { addAsset, removeAsset, subscribeToAssets } from '@services/firebase/assets';
+import { addAssetLocal, removeAssetLocal, selectAssets, selectAssetsLoading } from '@store/assetSlice';
+import { addAsset, removeAsset } from '@services/firebase/assets';
 import { selectUser } from '@store/authSlice';
+import LoadingState from '@components/common/LoadingState';
 
 const ASSET_TYPES = ['gold', 'cash', 'property', 'vehicle', 'crypto', 'other'];
 
@@ -23,6 +24,7 @@ const formatMoney = (value, language) => new Intl.NumberFormat(language === 'en'
 export const AssetsScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const assets = useSelector(selectAssets);
+  const assetsLoading = useSelector(selectAssetsLoading);
   const user = useSelector(selectUser);
   const { colors } = useAppTheme();
   const { t, language } = useTranslation();
@@ -40,16 +42,6 @@ export const AssetsScreen = ({ navigation }) => {
 
   const setField = (key) => (value) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  useEffect(() => {
-    if (!user?.uid) return undefined;
-
-    const unsubscribe = subscribeToAssets(user.uid, (remoteAssets) => {
-      dispatch(setAssets(remoteAssets));
-    });
-
-    return unsubscribe;
-  }, [dispatch, user?.uid]);
-
   const assetRows = useMemo(() => assets.map((asset) => {
     const qty = Number(asset.quantity) || 0;
     const buyPrice = Number(asset.buyPrice) || 0;
@@ -64,6 +56,23 @@ export const AssetsScreen = ({ navigation }) => {
   const totalValue = assetRows.reduce((sum, item) => sum + item.value, 0);
   const totalCost = assetRows.reduce((sum, item) => sum + item.cost, 0);
   const totalProfit = totalValue - totalCost;
+
+  if (assetsLoading && assets.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LinearGradient colors={colors.gradients.header} style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.title}>{t('assets.title')}</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
+            <Ionicons name="add" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        </LinearGradient>
+        <LoadingState />
+      </SafeAreaView>
+    );
+  }
 
   const handleAdd = async () => {
     if (!form.name.trim()) {

@@ -1,31 +1,27 @@
 // ============================================================
 // Notifications Screen
 // ============================================================
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { selectUser } from '@store/authSlice';
-import { selectAppNotifications, setAppNotifications } from '@store/appNotificationSlice';
-import { deleteAppNotification, markAppNotificationAsRead, subscribeToAppNotifications } from '@services/firebase/appNotifications';
+import { selectAppNotifications, selectAppNotificationsLoading, selectUnreadAppNotificationCount } from '@store/appNotificationSlice';
+import { deleteAllAppNotifications, deleteAppNotification, markAppNotificationAsRead } from '@services/firebase/appNotifications';
 import { useAppTheme } from '@hooks/useAppTheme';
 import { useTranslation } from '@hooks/useTranslation';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
+import LoadingState from '@components/common/LoadingState';
 
 export const NotificationsScreen = () => {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
   const { t } = useTranslation();
-  const dispatch = useDispatch();
   const user = useSelector(selectUser);
   const notifications = useSelector(selectAppNotifications);
-
-  useEffect(() => {
-    if (!user?.uid) return undefined;
-    const unsub = subscribeToAppNotifications(user.uid, (items) => dispatch(setAppNotifications(items)));
-    return unsub;
-  }, [dispatch, user?.uid]);
+  const activeCount = useSelector(selectUnreadAppNotificationCount);
+  const notificationsLoading = useSelector(selectAppNotificationsLoading);
 
   const handlePressNotification = async (item) => {
     if (item.isRead) return;
@@ -52,11 +48,64 @@ export const NotificationsScreen = () => {
     );
   };
 
+  const handleDeleteAllNotifications = () => {
+    if (!user?.uid || notifications.length === 0) return;
+
+    Alert.alert(
+      t('notifications.clearAllTitle'),
+      t('notifications.clearAllMessage'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await deleteAllAppNotifications(user.uid);
+            if (error) {
+              Alert.alert(t('common.error'), error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const activeCountLabel = activeCount > 99 ? '99+' : String(activeCount);
+
+  if (notificationsLoading && notifications.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View style={styles.headerInfo}>
+              <Text style={styles.title}>{t('notifications.title')}</Text>
+              <Text style={styles.subtitle}>{t('notifications.subtitle')}</Text>
+            </View>
+          </View>
+        </View>
+        <LoadingState />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>{t('notifications.title')}</Text>
-        <Text style={styles.subtitle}>{t('notifications.subtitle')}</Text>
+        <View style={styles.headerTop}>
+          <View style={styles.headerInfo}>
+            <Text style={styles.title}>{t('notifications.title')}</Text>
+            <Text style={styles.subtitle}>{t('notifications.subtitle')}</Text>
+          </View>
+          {notifications.length > 0 ? (
+            <TouchableOpacity onPress={handleDeleteAllNotifications} style={styles.clearAllBtn}>
+              <Ionicons name="trash-outline" size={16} color={colors.expense} />
+              <Text style={styles.clearAllText}>{t('notifications.clearAll')}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        {activeCount > 0 ? (
+          <Text style={styles.activeCount}>{t('notifications.unreadCount', { count: activeCountLabel })}</Text>
+        ) : null}
       </View>
       <FlatList
         data={notifications}
@@ -91,8 +140,23 @@ export const NotificationsScreen = () => {
 const createStyles = (colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.lg, paddingBottom: SPACING.md },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: SPACING.sm },
+  headerInfo: { flex: 1, paddingRight: SPACING.sm },
   title: { color: colors.textPrimary, fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold },
   subtitle: { color: colors.textMuted, marginTop: 4, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
+  activeCount: { color: colors.primary, marginTop: 8, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.medium },
+  clearAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: `${colors.expense}10`,
+    borderWidth: 1,
+    borderColor: `${colors.expense}25`,
+  },
+  clearAllText: { color: colors.expense, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.semibold },
   list: { padding: SPACING.lg },
   card: { backgroundColor: colors.surface, borderRadius: BORDER_RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.sm, borderWidth: 1, borderColor: colors.border, ...SHADOWS.sm },
   cardUnread: { borderColor: colors.primary },

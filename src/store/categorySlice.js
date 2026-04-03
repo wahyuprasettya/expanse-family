@@ -26,6 +26,7 @@ export const { setCategories, addCategoryLocal, removeCategoryLocal, setLoading,
   categorySlice.actions;
 
 export const selectCategories = (state) => state.categories.items;
+export const selectCategoriesLoading = (state) => state.categories.isLoading;
 export const selectCategoriesByType = (type) => (state) =>
   state.categories.items.filter((c) => c.type === type || c.type === 'both');
 

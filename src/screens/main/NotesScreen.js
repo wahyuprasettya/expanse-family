@@ -32,6 +32,7 @@ import {
   updateNote,
 } from '@services/firebase/notes';
 import { getHouseholdMembers } from '@services/firebase/users';
+import LoadingState from '@components/common/LoadingState';
 
 const BOARD_COLUMNS = ['todo', 'doing', 'done'];
 
@@ -55,13 +56,23 @@ export const NotesScreen = ({ navigation }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [notesLoading, setNotesLoading] = useState(true);
+  const [membersLoading, setMembersLoading] = useState(true);
   const [selectedNote, setSelectedNote] = useState(null);
   const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
-    if (!accountId) return undefined;
+    if (!accountId) {
+      setNotes([]);
+      setNotesLoading(false);
+      return undefined;
+    }
 
-    const unsubscribe = subscribeToNotes(accountId, setNotes);
+    setNotesLoading(true);
+    const unsubscribe = subscribeToNotes(accountId, (items) => {
+      setNotes(items);
+      setNotesLoading(false);
+    });
     return unsubscribe;
   }, [accountId]);
 
@@ -69,20 +80,26 @@ export const NotesScreen = ({ navigation }) => {
     let isMounted = true;
 
     const loadMembers = async () => {
+      setMembersLoading(true);
       const { members: fetchedMembers, error } = await getHouseholdMembers(accountId);
 
       if (!isMounted) return;
 
       if (error) {
         setMembers([]);
+        setMembersLoading(false);
         return;
       }
 
       setMembers(fetchedMembers);
+      setMembersLoading(false);
     };
 
     if (accountId) {
       loadMembers();
+    } else {
+      setMembers([]);
+      setMembersLoading(false);
     }
 
     return () => {
@@ -149,7 +166,10 @@ export const NotesScreen = ({ navigation }) => {
   };
 
   const handleMoveNote = async (note, nextStatus) => {
-    const { error } = await updateNote(note.id, { status: nextStatus });
+    const { error } = await updateNote(note.id, { status: nextStatus }, {
+      userId: user?.uid,
+      authorName: getCurrentUserName(),
+    });
     if (error) {
       Alert.alert(t('common.error'), error);
     }
@@ -201,6 +221,9 @@ export const NotesScreen = ({ navigation }) => {
       status: form.status,
       assignedToUid: form.assignedToUid || null,
       assignedToName: form.assignedToName || '',
+    }, {
+      userId: user?.uid,
+      authorName: getCurrentUserName(),
     });
     setLoading(false);
 
@@ -240,6 +263,32 @@ export const NotesScreen = ({ navigation }) => {
   );
 
   const canCollaborate = members.length > 1;
+
+  if ((notesLoading || membersLoading) && notes.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.title}>{t('notes.title')}</Text>
+            <Text style={styles.subtitle}>{t('notes.subtitle')}</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => {
+              resetForm();
+              setShowAddModal(true);
+            }}
+            style={styles.addBtn}
+          >
+            <Ionicons name="add" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+        <LoadingState />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

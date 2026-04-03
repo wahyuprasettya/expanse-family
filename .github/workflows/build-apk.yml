@@ -54,6 +54,20 @@ jobs:
       - name: Expo Prebuild (Generate Native Code)
         run: npx expo prebuild --platform android --clean
 
+      # 8.1 Verify notification icon wiring from app.json -> native Android
+      - name: Verify Notification Icon Resources
+        run: |
+          test -f assets/notification-icon.png
+          test -f android/app/src/main/AndroidManifest.xml
+          grep -q 'expo.modules.notifications.default_notification_icon' android/app/src/main/AndroidManifest.xml
+          grep -q 'com.google.firebase.messaging.default_notification_icon' android/app/src/main/AndroidManifest.xml
+          grep -q '@drawable/notification_icon' android/app/src/main/AndroidManifest.xml
+          test -f android/app/src/main/res/drawable-mdpi/notification_icon.png
+          test -f android/app/src/main/res/drawable-hdpi/notification_icon.png
+          test -f android/app/src/main/res/drawable-xhdpi/notification_icon.png
+          test -f android/app/src/main/res/drawable-xxhdpi/notification_icon.png
+          test -f android/app/src/main/res/drawable-xxxhdpi/notification_icon.png
+
       # 9. Masuk ke android folder & kasih permission
       - name: Grant permission
         run: chmod +x android/gradlew

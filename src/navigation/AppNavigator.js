@@ -14,13 +14,20 @@ import { useAuth } from '@hooks/useAuth';
 import { useTransactionSync } from '@hooks/useTransactionSync';
 import { useCategorySync } from '@hooks/useCategorySync';
 import { useReminderSync } from '@hooks/useReminderSync';
+import { useBudgetSync } from '@hooks/useBudgetSync';
+import { useAssetSync } from '@hooks/useAssetSync';
+import { useAppNotificationSync } from '@hooks/useAppNotificationSync';
 import { useLegacyCleanup } from '@hooks/useLegacyCleanup';
 
 export const AppNavigator = () => {
   const { isLoading } = useAuth();
+  const now = new Date();
   useTransactionSync();
   useCategorySync();
   useReminderSync();
+  useBudgetSync(now.getFullYear(), now.getMonth() + 1);
+  useAssetSync();
+  useAppNotificationSync();
   useLegacyCleanup();
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const isPinVerified = useSelector(selectIsPinVerified);

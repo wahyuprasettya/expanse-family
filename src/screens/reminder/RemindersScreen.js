@@ -11,10 +11,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectUser } from '@store/authSlice';
-import { selectReminders, removeReminderLocal } from '@store/reminderSlice';
+import { selectReminders, selectRemindersLoading, removeReminderLocal } from '@store/reminderSlice';
 import { addReminder, deleteReminder } from '@services/firebase/reminders';
 import Input from '@components/common/Input';
 import Button from '@components/common/Button';
+import LoadingState from '@components/common/LoadingState';
 import { formatCurrency, formatDateSmart } from '@utils/formatters';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -28,6 +29,7 @@ export const RemindersScreen = ({ navigation }) => {
   const styles = createStyles(colors);
   const user = useSelector(selectUser);
   const reminders = useSelector(selectReminders);
+  const remindersLoading = useSelector(selectRemindersLoading);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -84,6 +86,20 @@ export const RemindersScreen = ({ navigation }) => {
     if (diff <= 3) return colors.warning;
     return colors.textSecondary;
   };
+
+  if (remindersLoading && reminders.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LinearGradient colors={colors.gradients.header} style={styles.header}>
+          <Text style={styles.title}>{t('reminders.title')}</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
+            <Ionicons name="add" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        </LinearGradient>
+        <LoadingState />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

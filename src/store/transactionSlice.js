@@ -79,6 +79,7 @@ export const selectBalance = (state) => state.transactions.balance;
 export const selectTotalIncome = (state) => state.transactions.totalIncome;
 export const selectTotalExpense = (state) => state.transactions.totalExpense;
 export const selectFilter = (state) => state.transactions.filter;
+export const selectTransactionsLoading = (state) => state.transactions.isLoading;
 export const selectFilteredTransactions = createSelector(
   [selectTransactions, selectFilter],
   (items, filter) => items.filter((t) => {

@@ -21,10 +21,11 @@ const reminderSlice = createSlice({
   },
 });
 
-export const { setReminders, addReminderLocal, removeReminderLocal, toggleReminderLocal } =
+export const { setReminders, addReminderLocal, removeReminderLocal, toggleReminderLocal, setLoading } =
   reminderSlice.actions;
 
 export const selectReminders = (state) => state.reminders.items;
+export const selectRemindersLoading = (state) => state.reminders.isLoading;
 const selectReminderWindowKey = () => {
   const now = new Date();
   return `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;

@@ -7,6 +7,7 @@ const assetSlice = createSlice({
   name: 'assets',
   initialState: {
     items: [],
+    isLoading: false,
   },
   reducers: {
     addAssetLocal: {
@@ -31,9 +32,13 @@ const assetSlice = createSlice({
     setAssets: (state, action) => {
       state.items = action.payload;
     },
+    setLoading: (state, action) => {
+      state.isLoading = action.payload;
+    },
   },
 });
 
-export const { addAssetLocal, updateAssetLocal, removeAssetLocal, setAssets } = assetSlice.actions;
+export const { addAssetLocal, updateAssetLocal, removeAssetLocal, setAssets, setLoading } = assetSlice.actions;
 export const selectAssets = (state) => state.assets.items;
+export const selectAssetsLoading = (state) => state.assets.isLoading;
 export default assetSlice.reducer;

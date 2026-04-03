@@ -57,21 +57,22 @@ export const useTransactions = () => {
       }
     }
 
-    // Send push notification for expense
-    if (data.type === 'expense') {
-      try {
-        await sendTransactionNotification({
-          ...newTx,
-          title: `${data.categoryIcon || '💸'} ${t('transactionNotification.expenseTitle')}`,
-          body: t('transactionNotification.transactionBody', {
-            category: data.category,
-            amount: formatCurrency(data.amount, language),
-          }),
-        });
-      } catch (sideEffectError) {
-        console.warn('Transaction notification failed:', sideEffectError);
-      }
+    // Send local notification for all transaction types
+    const notificationConfig = getTransactionNotificationConfig(data.type, data.categoryIcon, t);
+    try {
+      await sendTransactionNotification({
+        ...newTx,
+        title: notificationConfig.title,
+        body: t('transactionNotification.transactionBody', {
+          category: data.category,
+          amount: formatCurrency(data.amount, language),
+        }),
+      });
+    } catch (sideEffectError) {
+      console.warn('Transaction notification failed:', sideEffectError);
+    }
 
+    if (data.type === 'expense') {
       // Send notification to other household members
       if (profile?.householdId && profile.householdId !== user.uid) {
         try {
@@ -181,3 +182,26 @@ export const useTransactions = () => {
 
 const formatCurrency = (amount, language) =>
   new Intl.NumberFormat(language === 'en' ? 'en-US' : 'id-ID', { style: 'currency', currency: 'IDR' }).format(amount);
+
+const getTransactionNotificationConfig = (type, categoryIcon, t) => {
+  const configs = {
+    expense: {
+      icon: categoryIcon || '💸',
+      title: t('transactionNotification.expenseTitle'),
+    },
+    income: {
+      icon: categoryIcon || '💰',
+      title: t('transactionNotification.incomeTitle'),
+    },
+    debt: {
+      icon: categoryIcon || '🧾',
+      title: t('transactionNotification.debtTitle'),
+    },
+  };
+
+  const config = configs[type] || configs.expense;
+  return {
+    ...config,
+    title: `${config.icon} ${config.title}`,
+  };
+};

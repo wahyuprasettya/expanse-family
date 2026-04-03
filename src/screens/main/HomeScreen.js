@@ -1,7 +1,7 @@
 // ============================================================
 // Home Screen (Dashboard)
 // ============================================================
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert
 } from 'react-native';
@@ -10,13 +10,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { selectUser } from '@store/authSlice';
-import { selectBalance, selectTotalIncome, selectTotalExpense, selectTransactions } from '@store/transactionSlice';
+import { selectBalance, selectTotalIncome, selectTotalExpense, selectTransactions, selectTransactionsLoading } from '@store/transactionSlice';
 import { selectCategories } from '@store/categorySlice';
-import { selectUpcomingReminders } from '@store/reminderSlice';
-import { selectBudgetWarnings } from '@store/budgetSlice';
+import { selectUpcomingReminders, selectRemindersLoading } from '@store/reminderSlice';
+import { selectBudgetWarnings, selectBudgetsLoading } from '@store/budgetSlice';
 import { selectUnreadAppNotificationCount } from '@store/appNotificationSlice';
 import { formatCurrency, formatCurrencyFull, formatDateSmart } from '@utils/formatters';
 import TransactionCard from '@components/transaction/TransactionCard';
+import LoadingState from '@components/common/LoadingState';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { useInsights } from '@hooks/useInsights';
 import { useTransactions } from '@hooks/useTransactions';
@@ -32,12 +33,16 @@ export const HomeScreen = ({ navigation }) => {
   const totalIncome = useSelector(selectTotalIncome);
   const totalExpense = useSelector(selectTotalExpense);
   const transactions = useSelector(selectTransactions);
+  const transactionsLoading = useSelector(selectTransactionsLoading);
   const categories = useSelector(selectCategories);
   const upcomingReminders = useSelector(selectUpcomingReminders);
+  const remindersLoading = useSelector(selectRemindersLoading);
   const budgetWarnings = useSelector(selectBudgetWarnings);
-  const unreadNotifications = useSelector(selectUnreadAppNotificationCount);
+  const budgetsLoading = useSelector(selectBudgetsLoading);
+  const activeNotifications = useSelector(selectUnreadAppNotificationCount);
   const insights = useInsights();
   const { deleteTransaction } = useTransactions();
+  const notificationBadgeLabel = activeNotifications > 99 ? '99+' : String(activeNotifications);
   const getCategoryDisplayName = (category) => {
     if (category?.isDefault && category?.id) {
       const translatedName = t(`categories.names.${category.id}`);
@@ -75,6 +80,19 @@ export const HomeScreen = ({ navigation }) => {
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t('home.morning') : hour < 17 ? t('home.afternoon') : t('home.evening');
+  const showInitialLoading =
+    (transactionsLoading || remindersLoading || budgetsLoading) &&
+    transactions.length === 0 &&
+    upcomingReminders.length === 0 &&
+    budgetWarnings.length === 0;
+
+  if (showInitialLoading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LoadingState />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -89,9 +107,9 @@ export const HomeScreen = ({ navigation }) => {
             <View style={styles.headerActions}>
               <TouchableOpacity onPress={() => navigation.navigate('Notifications')} style={styles.bellBtn}>
                 <Ionicons name="notifications-outline" size={22} color={colors.warning} />
-                {unreadNotifications > 0 ? (
+                {activeNotifications > 0 ? (
                   <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{unreadNotifications}</Text>
+                    <Text style={styles.badgeText}>{notificationBadgeLabel}</Text>
                   </View>
                 ) : null}
               </TouchableOpacity>
@@ -298,13 +316,22 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: `${colors.warning}35`,
   },
   badge: {
-    position: 'absolute', top: 1, right: 1,
-    minWidth: 16, height: 16, borderRadius: 8,
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: colors.expense,
-    alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: colors.background,
+    zIndex: 2,
+    elevation: 2,
   },
-  badgeText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
+  badgeText: { color: '#FFF', fontSize: 10, fontFamily: FONT_FAMILY.bold, lineHeight: 12 },
   avatar: {
     width: 44, height: 44,
     borderRadius: 22,

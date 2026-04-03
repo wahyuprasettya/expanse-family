@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import { logAppNotification } from './appNotifications';
+import { sendPushNotificationToUser } from './notifications';
 
 const NOTES_COLLECTION = 'notes';
 
@@ -77,18 +78,86 @@ export const addNote = async ({
       metadata: { status, assignedToUid, assignedToName: assignedToName || '' },
     });
 
+    if (assignedToUid && assignedToUid !== userId) {
+      await logAppNotification({
+        userId: assignedToUid,
+        title: 'Tugas baru untukmu',
+        body: `${authorName || 'Member'} menugaskan: ${title}`,
+        action: 'assign',
+        entityType: 'note_assignment',
+        entityId: docRef.id,
+        actorName: authorName || 'Member',
+        actorUid: userId,
+        metadata: { status, title, assignedToName: assignedToName || '' },
+      });
+
+      await sendPushNotificationToUser(assignedToUid, {
+        title: '📝 Tugas baru untukmu',
+        body: `${authorName || 'Member'} menugaskan "${title}"`,
+        data: {
+          type: 'note_assignment',
+          noteId: docRef.id,
+          action: 'assigned',
+        },
+      });
+    }
+
     return { id: docRef.id, error: null };
   } catch (error) {
     return { id: null, error: error.message };
   }
 };
 
-export const updateNote = async (noteId, updates) => {
+export const updateNote = async (noteId, updates, actor = {}) => {
   try {
-    await updateDoc(doc(db, NOTES_COLLECTION, noteId), {
+    const ref = doc(db, NOTES_COLLECTION, noteId);
+    const beforeSnap = await getDoc(ref);
+    const previous = beforeSnap.exists() ? beforeSnap.data() : null;
+
+    await updateDoc(ref, {
       ...updates,
       updatedAt: serverTimestamp(),
     });
+
+    const nextAssignedToUid = updates.assignedToUid ?? previous?.assignedToUid ?? null;
+    const assignmentChanged = previous?.assignedToUid !== nextAssignedToUid;
+
+    if (
+      assignmentChanged &&
+      nextAssignedToUid &&
+      nextAssignedToUid !== actor.userId
+    ) {
+      const noteTitle = updates.title || previous?.title || 'Catatan';
+      const actorName = actor.authorName || previous?.authorName || 'Member';
+      const assignedToName = updates.assignedToName || previous?.assignedToName || '';
+
+      await logAppNotification({
+        userId: nextAssignedToUid,
+        title: 'Tugas baru untukmu',
+        body: `${actorName} menugaskan: ${noteTitle}`,
+        action: 'assign',
+        entityType: 'note_assignment',
+        entityId: noteId,
+        actorName,
+        actorUid: actor.userId || null,
+        metadata: {
+          status: updates.status || previous?.status || 'todo',
+          title: noteTitle,
+          assignedToName,
+        },
+      });
+
+      await sendPushNotificationToUser(nextAssignedToUid, {
+        title: '📝 Tugas baru untukmu',
+        body: `${actorName} menugaskan "${noteTitle}"`,
+        data: {
+          type: 'note_assignment',
+          noteId,
+          action: 'assigned',
+        },
+      });
+    }
+
     return { error: null };
   } catch (error) {
     return { error: error.message };

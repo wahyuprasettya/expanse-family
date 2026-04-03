@@ -24,6 +24,7 @@ export const addBudget = async (userId, budgetData) => {
       userId,
       categoryId: budgetData.categoryId,
       categoryName: budgetData.categoryName,
+      categoryIcon: budgetData.categoryIcon || '📦',
       amount: budgetData.amount,
       period: budgetData.period, // 'monthly' | 'weekly' | 'yearly'
       month: budgetData.month,   // 1-12

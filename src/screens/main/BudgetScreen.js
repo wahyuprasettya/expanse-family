@@ -1,7 +1,7 @@
 // ============================================================
 // Budget Screen
 // ============================================================
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Alert, Modal, ScrollView
@@ -11,12 +11,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectUser } from '@store/authSlice';
-import { selectBudgets, setBudgets, removeBudgetLocal } from '@store/budgetSlice';
-import { subscribeToBudgets, addBudget, deleteBudget } from '@services/firebase/budgets';
+import { selectBudgets, selectBudgetsLoading, removeBudgetLocal } from '@store/budgetSlice';
+import { addBudget, deleteBudget } from '@services/firebase/budgets';
 import { selectCategories } from '@store/categorySlice';
 import BudgetCard from '@components/budget/BudgetCard';
 import Button from '@components/common/Button';
 import Input from '@components/common/Input';
+import LoadingState from '@components/common/LoadingState';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { formatCurrency, formatDate, parseAmount } from '@utils/formatters';
 import { useTranslation } from '@hooks/useTranslation';
@@ -29,6 +30,7 @@ export const BudgetScreen = ({ navigation }) => {
   const styles = createStyles(colors);
   const user = useSelector(selectUser);
   const budgets = useSelector(selectBudgets);
+  const budgetsLoading = useSelector(selectBudgetsLoading);
   const categories = useSelector(selectCategories);
   const now = new Date();
   const [year] = useState(now.getFullYear());
@@ -38,24 +40,18 @@ export const BudgetScreen = ({ navigation }) => {
   const [budgetAmount, setBudgetAmount] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!user?.uid) return;
-    const unsubscribe = subscribeToBudgets(user.uid, year, month, (data) => {
-      dispatch(setBudgets(data));
-    });
-    return unsubscribe;
-  }, [user?.uid, year, month, dispatch]);
-
   const handleAdd = async () => {
     if (!selectedCategory || !budgetAmount || parseAmount(budgetAmount) <= 0) {
       Alert.alert(t('common.error'), t('budget.fillAllFields'));
       return;
     }
 
+    const categoryName = getCategoryDisplayName(selectedCategory);
+
     setLoading(true);
     const { error } = await addBudget(user.uid, {
       categoryId: selectedCategory.id,
-      categoryName: selectedCategory.name,
+      categoryName,
       categoryIcon: selectedCategory.icon,
       amount: parseAmount(budgetAmount),
       period: 'monthly',
@@ -103,6 +99,20 @@ export const BudgetScreen = ({ navigation }) => {
   };
 
 
+  if (budgetsLoading && budgets.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LinearGradient colors={colors.gradients.header} style={styles.header}>
+          <Text style={styles.title}>{t('budget.title')}</Text>
+          <Text style={styles.subtitle}>{formatDate(new Date(year, month - 1, 1), 'MMM yyyy', language)}</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
+            <Ionicons name="add" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        </LinearGradient>
+        <LoadingState />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -186,8 +196,8 @@ export const BudgetScreen = ({ navigation }) => {
                     onPress={() => setSelectedCategory(category)}
                   >
                     <Text style={styles.catIcon}>{category.icon}</Text>
-                    <Text style={styles.catName}>
-                      {t(`categories.names.${category.id.toLowerCase()}`).split(' ')[0]}
+                    <Text style={styles.catName} numberOfLines={2}>
+                      {getCategoryDisplayName(category)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -278,21 +288,23 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.lg,
   },
-  modalTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
+  modalTitle: { fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
   modalLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, marginBottom: SPACING.sm, fontWeight: '500', fontFamily: FONT_FAMILY.medium },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: SPACING.lg },
   catItem: {
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 10,
     borderRadius: BORDER_RADIUS.md,
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
-    minWidth: 70,
+    width: '31%',
+    minHeight: 92,
   },
   catItemSelected: { borderColor: colors.primary, backgroundColor: `${colors.primary}20` },
   catIcon: { fontSize: 22, marginBottom: 4 },
-  catName: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
+  catName: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, textAlign: 'center' },
 });
 
 export default BudgetScreen;

@@ -29,6 +29,7 @@ export const { setBudgets, addBudgetLocal, updateBudgetLocal, removeBudgetLocal,
   budgetSlice.actions;
 
 export const selectBudgets = (state) => state.budgets.items;
+export const selectBudgetsLoading = (state) => state.budgets.isLoading;
 export const selectBudgetWarnings = createSelector(
   [selectBudgets],
   (budgets) => budgets.filter((b) => b.amount > 0 && (b.spent / b.amount) >= 0.8)

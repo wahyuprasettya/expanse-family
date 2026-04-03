@@ -11,10 +11,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { selectUser } from '@store/authSlice';
-import { selectCategories } from '@store/categorySlice';
+import { selectCategories, selectCategoriesLoading } from '@store/categorySlice';
 import { addCategory, deleteCategory } from '@services/firebase/categories';
 import Button from '@components/common/Button';
 import Input from '@components/common/Input';
+import LoadingState from '@components/common/LoadingState';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
 import { useTranslation } from '@hooks/useTranslation';
@@ -24,6 +25,7 @@ const ICON_OPTIONS = ['🏠','🍔','🚗','🎬','💊','📚','✈️','🛍�
 export const CategoriesScreen = ({ navigation }) => {
   const user = useSelector(selectUser);
   const categories = useSelector(selectCategories);
+  const categoriesLoading = useSelector(selectCategoriesLoading);
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
   const { t } = useTranslation();
@@ -76,6 +78,23 @@ export const CategoriesScreen = ({ navigation }) => {
   };
 
   const filtered = categories.filter((c) => c.type === activeType || c.type === 'both');
+
+  if (categoriesLoading && filtered.length === 0) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
+        <LinearGradient colors={colors.gradients.header} style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{t('categories.title')}</Text>
+          <TouchableOpacity style={[styles.addBtn, { backgroundColor: `${colors.primary}20` }]} onPress={() => setShowAddModal(true)}>
+            <Ionicons name="add" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        </LinearGradient>
+        <LoadingState />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>

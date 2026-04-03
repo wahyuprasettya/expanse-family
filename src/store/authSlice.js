@@ -23,7 +23,6 @@ const authSlice = createSlice({
         photoURL: action.payload.photoURL,
       } : null;
       state.isAuthenticated = !!action.payload;
-      state.isLoading = false;
     },
     setProfile: (state, action) => {
       state.profile = action.payload;
@@ -48,6 +47,7 @@ const authSlice = createSlice({
       state.profile = null;
       state.isAuthenticated = false;
       state.isPinVerified = false;
+      state.isLoading = false;
       state.error = null;
     },
   },
