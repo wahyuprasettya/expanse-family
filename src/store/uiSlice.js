@@ -2,12 +2,13 @@
 // UI Slice (modals, toasts, loading states)
 // ============================================================
 import { createSlice } from '@reduxjs/toolkit';
+import { getDeviceLanguage } from '@services/language';
 
 const uiSlice = createSlice({
   name: 'ui',
   initialState: {
     theme: 'system',
-    language: 'id',
+    language: getDeviceLanguage(),
     isAddTransactionModalOpen: false,
     activeTab: 'home',
     toastMessage: null,

@@ -5,9 +5,10 @@ import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { subscribeToAuthChanges, logoutUser, getUserProfile } from '@services/firebase/auth';
 import { setUser, setProfile, setLoading, logout, selectUser, selectIsAuthenticated, selectIsLoading } from '@store/authSlice';
-import { setTheme } from '@store/uiSlice';
+import { setLanguage, setTheme } from '@store/uiSlice';
 import { ensureHouseholdProfile } from '@services/firebase/users';
 import { registerForPushNotifications } from '@services/firebase/notifications';
+import { getDeviceLanguage } from '@services/language';
 
 export const useAuth = () => {
   const dispatch = useDispatch();
@@ -29,11 +30,13 @@ export const useAuth = () => {
 
         dispatch(setProfile(mergedProfile));
         dispatch(setTheme(mergedProfile?.theme || 'system'));
+        dispatch(setLanguage(mergedProfile?.language || getDeviceLanguage()));
         // Register push notifications
         await registerForPushNotifications(firebaseUser.uid);
       } else {
         dispatch(setProfile(null));
         dispatch(setTheme('system'));
+        dispatch(setLanguage(getDeviceLanguage()));
       }
     });
 

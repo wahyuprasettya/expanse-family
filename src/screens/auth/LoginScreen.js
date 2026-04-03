@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TouchableOpacity, Alert
+  Platform, TouchableOpacity, Alert, ImageBackground
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDispatch } from 'react-redux';
@@ -16,10 +16,12 @@ import { useTranslation } from '@hooks/useTranslation';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
 
+const authBackground = require('../../../assets/bg.jpeg');
+
 export const LoginScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { t } = useTranslation();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const styles = createStyles(colors);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,112 +51,139 @@ export const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <LinearGradient colors={colors.gradients.header} style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <Text style={styles.logoEmoji}>💰</Text>
-            </View>
-            <Text style={styles.title}>WP App</Text>
-            <Text style={styles.subtitle}>{t('auth.appSubtitle')}</Text>
-          </View>
-
-          {/* Form */}
-          <View style={styles.form}>
-            <Text style={styles.welcomeTitle}>{t('auth.welcomeBack')}</Text>
-            <Text style={styles.welcomeSubtitle}>{t('auth.signInToAccount')}</Text>
-
-            <Input
-              label={t('auth.email')}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              icon="mail-outline"
-              error={errors.email}
-            />
-
-            <Input
-              label={t('auth.password')}
-              value={password}
-              onChangeText={setPassword}
-              placeholder={t('auth.passwordPlaceholder')}
-              secureTextEntry
-              icon="lock-closed-outline"
-              error={errors.password}
-            />
-
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ForgotPassword')}
-              style={styles.forgotWrapper}
-            >
-              <Text style={styles.forgotText}>{t('auth.forgotPassword')}</Text>
-            </TouchableOpacity>
-
-            <Button
-              title={loading ? t('auth.signingIn') : t('auth.signIn')}
-              onPress={handleLogin}
-              loading={loading}
-              style={styles.loginBtn}
-            />
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>{t('common.or')}</Text>
-              <View style={styles.dividerLine} />
+    <ImageBackground source={authBackground} style={styles.container} imageStyle={styles.backgroundImage}>
+      <LinearGradient
+        colors={isDark ? ['rgba(2, 6, 23, 0.72)', 'rgba(15, 23, 42, 0.92)'] : ['rgba(248, 250, 252, 0.58)', 'rgba(226, 232, 240, 0.86)']}
+        style={styles.backdrop}
+      >
+        <View style={styles.orbTop} />
+        <View style={styles.orbBottom} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.header}>
+              <View style={styles.logoContainer}>
+                <Text style={styles.logoEmoji}>💰</Text>
+              </View>
+              <Text style={styles.title}>WP APP</Text>
+              <Text style={styles.subtitle}>{t('auth.appSubtitle')}</Text>
             </View>
 
-            <View style={styles.registerWrapper}>
-              <Text style={styles.registerPrompt}>{t('auth.noAccount')} </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                <Text style={styles.registerLink}>{t('auth.createAccount')}</Text>
+            <View style={styles.form}>
+              <Text style={styles.welcomeTitle}>{t('auth.welcomeBack')}</Text>
+              <Text style={styles.welcomeSubtitle}>{t('auth.signInToAccount')}</Text>
+
+              <Input
+                label={t('auth.email')}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                icon="mail-outline"
+                error={errors.email}
+              />
+
+              <Input
+                label={t('auth.password')}
+                value={password}
+                onChangeText={setPassword}
+                placeholder={t('auth.passwordPlaceholder')}
+                secureTextEntry
+                icon="lock-closed-outline"
+                error={errors.password}
+              />
+
+              <TouchableOpacity
+                onPress={() => navigation.navigate('ForgotPassword')}
+                style={styles.forgotWrapper}
+              >
+                <Text style={styles.forgotText}>{t('auth.forgotPassword')}</Text>
               </TouchableOpacity>
+
+              <Button
+                title={loading ? t('auth.signingIn') : t('auth.signIn')}
+                onPress={handleLogin}
+                loading={loading}
+                style={styles.loginBtn}
+              />
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>{t('common.or')}</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <View style={styles.registerWrapper}>
+                <Text style={styles.registerPrompt}>{t('auth.noAccount')} </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                  <Text style={styles.registerLink}>{t('auth.createAccount')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </LinearGradient>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
+    </ImageBackground>
   );
 };
 
 const createStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
+  backgroundImage: {
+    resizeMode: 'cover',
+    width: '128%',
+    left: '-14%',
+  },
+  backdrop: { flex: 1 },
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingTop: 60 },
+  scroll: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingTop: 60, paddingBottom: SPACING.xl, justifyContent: 'center' },
+  orbTop: {
+    position: 'absolute',
+    top: -60,
+    right: -20,
+    width: 220,
+    height: 220,
+    borderRadius: 999,
+    backgroundColor: `${colors.primary}28`,
+  },
+  orbBottom: {
+    position: 'absolute',
+    bottom: -70,
+    left: -40,
+    width: 240,
+    height: 240,
+    borderRadius: 999,
+    backgroundColor: `${colors.secondary}1f`,
+  },
   header: { alignItems: 'center', marginBottom: SPACING.xxl },
   logoContainer: {
     width: 80, height: 80,
     borderRadius: BORDER_RADIUS.xl,
-    backgroundColor: `${colors.primary}30`,
+    backgroundColor: `${colors.surface}82`,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: `${colors.primary}50`,
+    borderColor: `${colors.textInverse}20`,
   },
   logoEmoji: { fontSize: 40 },
   title: {
     fontSize: FONT_SIZE.xxxl,
-    fontWeight: FONT_WEIGHT.extrabold,
     fontFamily: FONT_FAMILY.extrabold,
     color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   subtitle: { color: colors.textSecondary, fontSize: FONT_SIZE.md, marginTop: 4, fontFamily: FONT_FAMILY.regular },
   form: {
-    backgroundColor: colors.surface,
+    backgroundColor: `${colors.surface}d9`,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: `${colors.textInverse}14`,
     marginBottom: SPACING.xl,
   },
   welcomeTitle: {
-    fontSize: FONT_SIZE.xxl,
-    fontWeight: FONT_WEIGHT.bold,
+    fontSize: FONT_SIZE.xl,
     fontFamily: FONT_FAMILY.bold,
     color: colors.textPrimary,
     marginBottom: 4,

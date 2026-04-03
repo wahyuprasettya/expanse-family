@@ -12,6 +12,7 @@ import {
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './config';
 import * as SecureStore from 'expo-secure-store';
+import { getDeviceLanguage } from '@services/language';
 
 const generateShareCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
 
@@ -58,6 +59,7 @@ export const registerUser = async ({ email, password, displayName }) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
+    const deviceLanguage = getDeviceLanguage();
 
     await updateProfile(user, { displayName });
 
@@ -69,11 +71,11 @@ export const registerUser = async ({ email, password, displayName }) => {
       displayName,
       createdAt: serverTimestamp(),
       currency: 'IDR',
-      language: 'id',
+      language: deviceLanguage,
       notificationsEnabled: true,
       biometricEnabled: false,
       pinEnabled: false,
-      theme: 'dark',
+      theme: 'system',
       shareCode,
       householdId: user.uid,
       householdRole: 'owner',

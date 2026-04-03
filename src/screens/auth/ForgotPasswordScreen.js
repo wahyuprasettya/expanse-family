@@ -123,7 +123,6 @@ const createStyles = (colors) => StyleSheet.create({
   logoEmoji: { fontSize: 40 },
   title: {
     fontSize: FONT_SIZE.xxxl,
-    fontWeight: FONT_WEIGHT.extrabold,
     fontFamily: FONT_FAMILY.extrabold,
     color: colors.textPrimary,
     letterSpacing: -0.5,

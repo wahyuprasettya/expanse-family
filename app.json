@@ -81,7 +81,9 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/2af2f454-c552-4314-b167-f44a077a025c"
+      "url": "https://u.expo.dev/2af2f454-c552-4314-b167-f44a077a025c",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }
