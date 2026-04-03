@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "366154491402",
+    "firebase_url": "https://farhan-9ad76-default-rtdb.firebaseio.com",
+    "project_id": "farhan-9ad76",
+    "storage_bucket": "farhan-9ad76.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:366154491402:android:8995795689d4905e45e1f3",
+        "android_client_info": {
+          "package_name": "com.wahyu.wapmoney"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDACC3dMeGSxugbARZlohq-XOWO7gBMHuU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

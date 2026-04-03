@@ -10,7 +10,7 @@ web-build/
 *.key
 *.mobileprovision
 *.orig.*
-google-services.json
+# google-services.json
 GoogleService-Info.plist
 npm-debug.*
 yarn-debug.*
