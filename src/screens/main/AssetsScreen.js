@@ -17,6 +17,7 @@ import { addAsset, removeAsset } from '@services/firebase/assets';
 import { sendHouseholdNotification } from '@services/firebase/notifications';
 import { selectProfile, selectUser } from '@store/authSlice';
 import LoadingState from '@components/common/LoadingState';
+import { formatRupiahInput, parseAmount } from '@utils/formatters';
 
 const ASSET_TYPES = ['gold', 'cash', 'property', 'vehicle', 'crypto', 'other'];
 
@@ -90,13 +91,13 @@ export const AssetsScreen = ({ navigation }) => {
     const assetPayload = {
       ...form,
       quantity: Number(form.quantity),
-      buyPrice: Number(form.buyPrice),
-      currentPrice: Number(form.currentPrice),
+      buyPrice: parseAmount(form.buyPrice),
+      currentPrice: parseAmount(form.currentPrice),
     };
 
     dispatch(addAssetLocal(assetPayload));
     if (user?.uid) {
-      const { error } = await addAsset(user.uid, assetPayload);
+      const { id, error } = await addAsset(user.uid, assetPayload);
       if (error) {
         Alert.alert(t('common.error'), error);
       } else {
@@ -112,6 +113,7 @@ export const AssetsScreen = ({ navigation }) => {
             data: {
               type: 'household_asset',
               action: 'added',
+              assetId: id,
             },
           });
         } catch (sideEffectError) {
@@ -182,6 +184,7 @@ export const AssetsScreen = ({ navigation }) => {
                             data: {
                               type: 'household_asset',
                               action: 'deleted',
+                              assetId: item.id,
                             },
                           });
                         } catch (sideEffectError) {
@@ -241,9 +244,9 @@ export const AssetsScreen = ({ navigation }) => {
               <Text style={styles.fieldLabel}>{t('assets.quantity')}</Text>
               <TextInput style={styles.input} keyboardType="numeric" value={form.quantity} onChangeText={setField('quantity')} placeholder="0" placeholderTextColor={colors.textMuted} />
               <Text style={styles.fieldLabel}>{t('assets.buyPrice')}</Text>
-              <TextInput style={styles.input} keyboardType="numeric" value={form.buyPrice} onChangeText={setField('buyPrice')} placeholder="1000000" placeholderTextColor={colors.textMuted} />
+              <TextInput style={styles.input} keyboardType="numeric" value={form.buyPrice} onChangeText={(value) => setField('buyPrice')(formatRupiahInput(value))} placeholder="1.000.000" placeholderTextColor={colors.textMuted} />
               <Text style={styles.fieldLabel}>{t('assets.currentPrice')}</Text>
-              <TextInput style={styles.input} keyboardType="numeric" value={form.currentPrice} onChangeText={setField('currentPrice')} placeholder="1000000" placeholderTextColor={colors.textMuted} />
+              <TextInput style={styles.input} keyboardType="numeric" value={form.currentPrice} onChangeText={(value) => setField('currentPrice')(formatRupiahInput(value))} placeholder="1.000.000" placeholderTextColor={colors.textMuted} />
               <Text style={styles.fieldLabel}>{t('assets.notes')}</Text>
               <TextInput style={[styles.input, styles.textArea]} multiline value={form.notes} onChangeText={setField('notes')} placeholder={t('assets.notesPlaceholder')} placeholderTextColor={colors.textMuted} />
               <TouchableOpacity style={styles.saveBtn} onPress={handleAdd}>

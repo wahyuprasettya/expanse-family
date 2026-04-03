@@ -17,7 +17,7 @@ import Button from '@components/common/Button';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
 import { useTranslation } from '@hooks/useTranslation';
-import { parseAmount, formatDate } from '@utils/formatters';
+import { parseAmount, formatDate, formatRupiahInput } from '@utils/formatters';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const TRANSACTION_TYPES = ['expense', 'income', 'debt'];
@@ -68,7 +68,7 @@ export const AddTransactionScreen = ({ navigation, route }) => {
     if (!prefill) return;
 
     if (prefill.type) setType(prefill.type);
-    if (prefill.amount) setAmount(String(prefill.amount));
+    if (prefill.amount) setAmount(formatRupiahInput(prefill.amount));
     if (prefill.description) setDescription(prefill.description);
     if (prefill.date) setDate(new Date(prefill.date));
   }, [route?.params?.prefill]);
@@ -187,6 +187,7 @@ export const AddTransactionScreen = ({ navigation, route }) => {
                 onChangeText={setAmount}
                 placeholder="0"
                 keyboardType="numeric"
+                formatAsRupiah
                 inputStyle={styles.amountText}
                 style={{ flex: 1, marginBottom: 0 }}
                 error={errors.amount}

@@ -209,6 +209,7 @@ export const BudgetScreen = ({ navigation }) => {
                 onChangeText={setBudgetAmount}
                 placeholder={t('budget.monthlyLimitPlaceholder')}
                 keyboardType="numeric"
+                formatAsRupiah
                 icon="wallet-outline"
                 prefix="Rp"
               />

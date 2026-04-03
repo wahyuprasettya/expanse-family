@@ -7,6 +7,7 @@ import { doc, setDoc, collection, query, where, getDocs, getDoc } from 'firebase
 import { db } from './config';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { logAppNotification } from './appNotifications';
 
 const NOTIFICATION_CHANNELS = {
   default: 'default',
@@ -180,6 +181,15 @@ export const getHouseholdMembers = async (householdId) => {
   }
 };
 
+const resolveNotificationEntityId = (notification = {}, options = {}) =>
+  options.entityId ||
+  notification?.data?.entityId ||
+  notification?.data?.transactionId ||
+  notification?.data?.reminderId ||
+  notification?.data?.assetId ||
+  notification?.data?.noteId ||
+  null;
+
 // ─── Send Push Notification to Household Members ────────────
 export const sendHouseholdNotification = async (householdId, senderUid, notification, options = {}) => {
   try {
@@ -189,17 +199,49 @@ export const sendHouseholdNotification = async (householdId, senderUid, notifica
       ...(Array.isArray(options.excludeUserIds) ? options.excludeUserIds : []),
     ].filter(Boolean));
 
+    const senderMember = members.find((member) => member.uid === senderUid);
+    const actorName =
+      options.actorName ||
+      notification?.actorName ||
+      senderMember?.displayName ||
+      senderMember?.email ||
+      'Member';
+
     // Filter out the sender and any explicitly excluded users.
     const recipients = members.filter(
-      (member) => !excludedUserIds.has(member.uid) && member.expoPushToken
+      (member) => !excludedUserIds.has(member.uid)
     );
 
     if (recipients.length === 0) {
       return;
     }
 
+    if (options.logToApp !== false) {
+      await Promise.all(recipients.map((member) => logAppNotification({
+        userId: member.uid,
+        title: notification.title,
+        body: notification.body,
+        action: options.action || notification?.data?.action || 'broadcast',
+        entityType: options.entityType || notification?.data?.type || 'household_activity',
+        entityId: resolveNotificationEntityId(notification, options),
+        actorName,
+        actorUid: senderUid || null,
+        metadata: {
+          householdId,
+          ...(notification?.data || {}),
+          ...(options.metadata || {}),
+        },
+      })));
+    }
+
+    const pushRecipients = recipients.filter((member) => member.expoPushToken);
+
+    if (pushRecipients.length === 0) {
+      return;
+    }
+
     // Send push notifications to all recipients via Expo
-    const messages = recipients.map(member => ({
+    const messages = pushRecipients.map(member => ({
       to: member.expoPushToken,
       title: notification.title,
       body: notification.body,

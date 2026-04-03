@@ -17,7 +17,7 @@ import { sendHouseholdNotification } from '@services/firebase/notifications';
 import Input from '@components/common/Input';
 import Button from '@components/common/Button';
 import LoadingState from '@components/common/LoadingState';
-import { formatCurrency, formatDateSmart } from '@utils/formatters';
+import { formatCurrency, formatDateSmart, parseAmount } from '@utils/formatters';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAppTheme } from '@hooks/useAppTheme';
@@ -53,9 +53,9 @@ export const RemindersScreen = ({ navigation }) => {
       return;
     }
     setLoading(true);
-    const { error } = await addReminder(user.uid, {
+    const { id, error } = await addReminder(user.uid, {
       ...form,
-      amount: parseFloat(form.amount) || 0,
+      amount: parseAmount(form.amount),
       daysBefore: parseInt(form.daysBefore) || 1,
     }, t);
     setLoading(false);
@@ -74,6 +74,7 @@ export const RemindersScreen = ({ navigation }) => {
           data: {
             type: 'household_reminder',
             action: 'added',
+            reminderId: id,
           },
         });
       } catch (sideEffectError) {
@@ -109,6 +110,7 @@ export const RemindersScreen = ({ navigation }) => {
               data: {
                 type: 'household_reminder',
                 action: 'deleted',
+                reminderId: r.id,
               },
             });
           } catch (sideEffectError) {
@@ -210,7 +212,7 @@ export const RemindersScreen = ({ navigation }) => {
             </View>
 
             <Input label={t('reminders.billName')} value={form.name} onChangeText={setField('name')} placeholder={t('reminders.billPlaceholder')} icon="document-text-outline" />
-            <Input label={t('reminders.amount')} value={form.amount} onChangeText={setField('amount')} placeholder="0" keyboardType="numeric" icon="wallet-outline" prefix="Rp" />
+            <Input label={t('reminders.amount')} value={form.amount} onChangeText={setField('amount')} placeholder="0" keyboardType="numeric" formatAsRupiah icon="wallet-outline" prefix="Rp" />
             <Input label={t('common.category')} value={form.category} onChangeText={setField('category')} placeholder="Bills & Utilities" icon="folder-outline" />
             <Input label={t('reminders.remindBefore')} value={form.daysBefore} onChangeText={setField('daysBefore')} keyboardType="numeric" icon="alarm-outline" />
 

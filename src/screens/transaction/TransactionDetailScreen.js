@@ -35,6 +35,7 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
         return translatedName !== `categories.names.${category.id}` ? translatedName : category.name;
       })()
     : category?.name || transaction.category;
+  const transactionActorName = transaction.createdByName || t('profile.fallbackUser');
 
   const handleDelete = () => {
     Alert.alert(t('transaction.deleteTitle'), t('transaction.deleteMessage'), [
@@ -117,6 +118,7 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
           <View style={[styles.relatedCard, { borderColor: typeColor }]}>
             <Text style={styles.relatedText}>
               {t('transaction.categoryInfo', {
+                actorName: transactionActorName,
                 category: categoryName,
                 type: transaction.type,
                 amount: formatCurrency(transaction.amount, 'IDR', language),

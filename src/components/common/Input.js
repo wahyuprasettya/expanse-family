@@ -6,6 +6,7 @@ import { View, TextInput, Text, TouchableOpacity, StyleSheet } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { BORDER_RADIUS, FONT_SIZE, SPACING, SHADOWS, FONT_FAMILY } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
+import { formatRupiahInput } from '@utils/formatters';
 
 export const Input = ({
   label,
@@ -26,12 +27,21 @@ export const Input = ({
   style,
   inputStyle,
   prefix,
+  formatAsRupiah = false,
   ...props
 }) => {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
   const [isFocused, setIsFocused] = useState(false);
   const [isVisible, setIsVisible] = useState(!secureTextEntry);
+  const handleChangeText = (text) => {
+    if (formatAsRupiah) {
+      onChangeText(formatRupiahInput(text));
+      return;
+    }
+
+    onChangeText(text);
+  };
 
   return (
     <View style={[styles.container, style]}>
@@ -52,7 +62,7 @@ export const Input = ({
         )}
         <TextInput
           value={value}
-          onChangeText={onChangeText}
+          onChangeText={handleChangeText}
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
           secureTextEntry={!isVisible}

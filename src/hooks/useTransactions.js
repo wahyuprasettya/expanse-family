@@ -72,35 +72,35 @@ export const useTransactions = () => {
       console.warn('Transaction notification failed:', sideEffectError);
     }
 
-    if (data.type === 'expense') {
-      // Send notification to other household members in the same shared account.
-      // For owners, householdId is often equal to user.uid, so comparing against
-      // user.uid incorrectly blocks notifications to their partner.
-      if (accountId) {
-        try {
-          await sendHouseholdNotification(
-            accountId,
-            user.uid,
-            {
-              title: t('transactionNotification.householdAddedTitle', {
-                name: user.displayName || t('profile.fallbackUser'),
-              }),
-              body: t('transactionNotification.householdAddedBody', {
-                category: data.category,
-                amount: formatCurrency(data.amount, language),
-              }),
-              data: {
-                transactionId: id,
-                type: 'household_transaction',
-                action: 'added'
-              },
-            }
-          );
-        } catch (sideEffectError) {
-          console.warn('Household notification failed:', sideEffectError);
-        }
+    // Send notification to other household members in the same shared account.
+    // For owners, householdId is often equal to user.uid, so comparing against
+    // user.uid incorrectly blocks notifications to their partner.
+    if (accountId) {
+      try {
+        await sendHouseholdNotification(
+          accountId,
+          user.uid,
+          {
+            title: t('transactionNotification.householdAddedTitle', {
+              name: user.displayName || t('profile.fallbackUser'),
+            }),
+            body: t('transactionNotification.householdAddedBody', {
+              category: data.category,
+              amount: formatCurrency(data.amount, language),
+            }),
+            data: {
+              transactionId: id,
+              type: 'household_transaction',
+              action: 'added'
+            },
+          }
+        );
+      } catch (sideEffectError) {
+        console.warn('Household notification failed:', sideEffectError);
       }
+    }
 
+    if (data.type === 'expense') {
       // Check budget and warn if needed
       const now = new Date();
       try {

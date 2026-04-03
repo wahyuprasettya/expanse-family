@@ -77,10 +77,17 @@ export const formatPercentage = (value, total) => {
   return `${Math.round((value / total) * 100)}%`;
 };
 
+export const formatRupiahInput = (value) => {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  if (!digits) return '';
+
+  const normalizedDigits = digits.replace(/^0+(?=\d)/, '');
+  return (normalizedDigits || '0').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
 export const parseAmount = (value) => {
-  // Remove non-numeric except dot and comma
-  const cleaned = String(value).replace(/[^0-9.,]/g, '').replace(',', '.');
-  return parseFloat(cleaned) || 0;
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return Number(digits) || 0;
 };
 
 // ─── Insight Text ─────────────────────────────────────────────

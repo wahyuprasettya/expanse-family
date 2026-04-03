@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -45,6 +46,7 @@ const emptyForm = {
 };
 
 export const NotesScreen = ({ navigation }) => {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { colors } = useAppTheme();
   const { t } = useTranslation();
   const styles = createStyles(colors);
@@ -263,6 +265,8 @@ export const NotesScreen = ({ navigation }) => {
   );
 
   const canCollaborate = members.length > 1;
+  const columnWidth = Math.min(320, Math.max(260, screenWidth - (SPACING.lg * 2)));
+  const boardMinHeight = Math.max(320, screenHeight - 220);
 
   if ((notesLoading || membersLoading) && notes.length === 0) {
     return (
@@ -311,66 +315,83 @@ export const NotesScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.board}>
-        {BOARD_COLUMNS.map((status) => (
-          <View key={status} style={styles.column}>
-            <View style={styles.columnHeader}>
-              <Text style={styles.columnTitle}>{t(`notes.status.${status}`)}</Text>
-              <View style={styles.countBadge}>
-                <Text style={styles.countText}>{groupedNotes[status]?.length || 0}</Text>
+      <View style={styles.boardWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.board, { minHeight: boardMinHeight }]}
+          style={styles.boardScroll}
+        >
+          {BOARD_COLUMNS.map((status) => (
+            <View key={status} style={[styles.column, { width: columnWidth }]}>
+              <View style={styles.columnHeader}>
+                <Text style={styles.columnTitle}>{t(`notes.status.${status}`)}</Text>
+                <View style={styles.countBadge}>
+                  <Text style={styles.countText}>{groupedNotes[status]?.length || 0}</Text>
+                </View>
               </View>
-            </View>
 
-            {groupedNotes[status]?.length ? groupedNotes[status].map((note) => (
-              <TouchableOpacity
-                key={note.id}
-                activeOpacity={0.88}
-                onPress={() => openManageModal(note)}
-                onLongPress={() => handleDeleteNote(note)}
-                style={styles.noteCard}
+              <ScrollView
+                style={styles.columnScroll}
+                contentContainerStyle={[
+                  styles.columnContent,
+                  !groupedNotes[status]?.length && styles.columnContentEmpty,
+                ]}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
               >
-                <Text style={styles.noteTitle}>{note.title}</Text>
-                {note.description ? (
-                  <Text style={styles.noteDescription} numberOfLines={4}>{note.description}</Text>
-                ) : null}
-                <Text style={styles.noteMeta}>
-                  {t('notes.noteCreatedBy', { name: note.authorName || t('profile.fallbackUser') })}
-                </Text>
-                <View style={styles.assigneeBadge}>
-                  <Ionicons name="person-outline" size={12} color={colors.primary} />
-                  <Text style={styles.assigneeBadgeText}>
-                    {note.assignedToName
-                      ? t('notes.noteAssignedTo', { name: note.assignedToName })
-                      : t('notes.noAssignee')}
-                  </Text>
-                </View>
-                <View style={styles.noteActions}>
-                  {status !== 'todo' ? (
-                    <TouchableOpacity
-                      style={styles.noteActionBtn}
-                      onPress={() => handleMoveNote(note, BOARD_COLUMNS[BOARD_COLUMNS.indexOf(status) - 1])}
-                    >
-                      <Ionicons name="arrow-back" size={14} color={colors.textMuted} />
-                    </TouchableOpacity>
-                  ) : <View style={styles.noteActionSpacer} />}
-                  {status !== 'done' ? (
-                    <TouchableOpacity
-                      style={styles.noteActionBtn}
-                      onPress={() => handleMoveNote(note, BOARD_COLUMNS[BOARD_COLUMNS.indexOf(status) + 1])}
-                    >
-                      <Ionicons name="arrow-forward" size={14} color={colors.primary} />
-                    </TouchableOpacity>
-                  ) : <View style={styles.noteActionSpacer} />}
-                </View>
-              </TouchableOpacity>
-            )) : (
-              <View style={styles.emptyColumn}>
-                <Text style={styles.emptyColumnText}>{t('notes.emptyColumn')}</Text>
-              </View>
-            )}
-          </View>
-        ))}
-      </ScrollView>
+                {groupedNotes[status]?.length ? groupedNotes[status].map((note) => (
+                  <TouchableOpacity
+                    key={note.id}
+                    activeOpacity={0.88}
+                    onPress={() => openManageModal(note)}
+                    onLongPress={() => handleDeleteNote(note)}
+                    style={styles.noteCard}
+                  >
+                    <Text style={styles.noteTitle}>{note.title}</Text>
+                    {note.description ? (
+                      <Text style={styles.noteDescription} numberOfLines={4}>{note.description}</Text>
+                    ) : null}
+                    <Text style={styles.noteMeta}>
+                      {t('notes.noteCreatedBy', { name: note.authorName || t('profile.fallbackUser') })}
+                    </Text>
+                    <View style={styles.assigneeBadge}>
+                      <Ionicons name="person-outline" size={12} color={colors.primary} />
+                      <Text style={styles.assigneeBadgeText}>
+                        {note.assignedToName
+                          ? t('notes.noteAssignedTo', { name: note.assignedToName })
+                          : t('notes.noAssignee')}
+                      </Text>
+                    </View>
+                    <View style={styles.noteActions}>
+                      {status !== 'todo' ? (
+                        <TouchableOpacity
+                          style={styles.noteActionBtn}
+                          onPress={() => handleMoveNote(note, BOARD_COLUMNS[BOARD_COLUMNS.indexOf(status) - 1])}
+                        >
+                          <Ionicons name="arrow-back" size={14} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      ) : <View style={styles.noteActionSpacer} />}
+                      {status !== 'done' ? (
+                        <TouchableOpacity
+                          style={styles.noteActionBtn}
+                          onPress={() => handleMoveNote(note, BOARD_COLUMNS[BOARD_COLUMNS.indexOf(status) + 1])}
+                        >
+                          <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+                        </TouchableOpacity>
+                      ) : <View style={styles.noteActionSpacer} />}
+                    </View>
+                  </TouchableOpacity>
+                )) : (
+                  <View style={styles.emptyColumn}>
+                    <Text style={styles.emptyColumnText}>{t('notes.emptyColumn')}</Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          ))}
+        </ScrollView>
+      </View>
 
       {!canCollaborate ? (
         <View style={styles.infoBanner}>
@@ -530,9 +551,12 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: BORDER_RADIUS.full,
     backgroundColor: `${colors.primary}18`,
   },
-  board: { padding: SPACING.lg, gap: SPACING.md },
+  boardWrap: { flex: 1 },
+  boardScroll: { flex: 1 },
+  board: { padding: SPACING.lg, gap: SPACING.md, alignItems: 'stretch' },
   column: {
-    width: 280,
+    flexShrink: 0,
+    height: '100%',
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.md,
@@ -541,6 +565,9 @@ const createStyles = (colors) => StyleSheet.create({
     ...SHADOWS.sm,
   },
   columnHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
+  columnScroll: { flex: 1 },
+  columnContent: { paddingBottom: SPACING.xs },
+  columnContentEmpty: { flexGrow: 1 },
   columnTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.semibold },
   countBadge: {
     minWidth: 26,
@@ -587,6 +614,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   noteActionSpacer: { width: 32, height: 32 },
   emptyColumn: {
+    flex: 1,
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
     borderStyle: 'dashed',
