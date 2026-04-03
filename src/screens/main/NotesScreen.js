@@ -3,7 +3,14 @@
 // ============================================================
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,10 +18,30 @@ import { useSelector } from 'react-redux';
 import { selectProfile, selectUser } from '@store/authSlice';
 import { useAppTheme } from '@hooks/useAppTheme';
 import { useTranslation } from '@hooks/useTranslation';
-import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
-import { addNote, deleteNote, subscribeToNotes, updateNote } from '@services/firebase/notes';
+import {
+  BORDER_RADIUS,
+  FONT_FAMILY,
+  FONT_SIZE,
+  SPACING,
+  SHADOWS,
+} from '@constants/theme';
+import {
+  addNote,
+  deleteNote,
+  subscribeToNotes,
+  updateNote,
+} from '@services/firebase/notes';
+import { getHouseholdMembers } from '@services/firebase/users';
 
 const BOARD_COLUMNS = ['todo', 'doing', 'done'];
+
+const emptyForm = {
+  title: '',
+  description: '',
+  status: 'todo',
+  assignedToUid: '',
+  assignedToName: '',
+};
 
 export const NotesScreen = ({ navigation }) => {
   const { colors } = useAppTheme();
@@ -24,19 +51,43 @@ export const NotesScreen = ({ navigation }) => {
   const profile = useSelector(selectProfile);
   const accountId = profile?.householdId || user?.uid;
   const [notes, setNotes] = useState([]);
+  const [members, setMembers] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    status: 'todo',
-  });
+  const [selectedNote, setSelectedNote] = useState(null);
+  const [form, setForm] = useState(emptyForm);
 
   useEffect(() => {
     if (!accountId) return undefined;
 
     const unsubscribe = subscribeToNotes(accountId, setNotes);
     return unsubscribe;
+  }, [accountId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadMembers = async () => {
+      const { members: fetchedMembers, error } = await getHouseholdMembers(accountId);
+
+      if (!isMounted) return;
+
+      if (error) {
+        setMembers([]);
+        return;
+      }
+
+      setMembers(fetchedMembers);
+    };
+
+    if (accountId) {
+      loadMembers();
+    }
+
+    return () => {
+      isMounted = false;
+    };
   }, [accountId]);
 
   const groupedNotes = useMemo(
@@ -49,6 +100,26 @@ export const NotesScreen = ({ navigation }) => {
 
   const setField = (key) => (value) => setForm((prev) => ({ ...prev, [key]: value }));
 
+  const resetForm = () => {
+    setForm(emptyForm);
+  };
+
+  const getCurrentUserName = () => user?.displayName || user?.email || t('profile.fallbackUser');
+
+  const handleAssignMember = (member) => {
+    setForm((prev) => ({
+      ...prev,
+      assignedToUid: member?.uid || '',
+      assignedToName: member?.displayName || '',
+    }));
+  };
+
+  const closeManageModal = () => {
+    setSelectedNote(null);
+    resetForm();
+    setShowManageModal(false);
+  };
+
   const handleAddNote = async () => {
     if (!form.title.trim()) {
       Alert.alert(t('common.error'), t('notes.titleRequired'));
@@ -59,10 +130,12 @@ export const NotesScreen = ({ navigation }) => {
     const { error } = await addNote({
       accountId,
       userId: user?.uid,
-      authorName: user?.displayName || user?.email || t('profile.fallbackUser'),
+      authorName: getCurrentUserName(),
       title: form.title.trim(),
       description: form.description.trim(),
       status: form.status,
+      assignedToUid: form.assignedToUid || null,
+      assignedToName: form.assignedToName || '',
     });
     setLoading(false);
 
@@ -71,7 +144,7 @@ export const NotesScreen = ({ navigation }) => {
       return;
     }
 
-    setForm({ title: '', description: '', status: 'todo' });
+    resetForm();
     setShowAddModal(false);
   };
 
@@ -102,6 +175,72 @@ export const NotesScreen = ({ navigation }) => {
     );
   };
 
+  const openManageModal = (note) => {
+    setSelectedNote(note);
+    setForm({
+      title: note.title || '',
+      description: note.description || '',
+      status: note.status || 'todo',
+      assignedToUid: note.assignedToUid || '',
+      assignedToName: note.assignedToName || '',
+    });
+    setShowManageModal(true);
+  };
+
+  const handleUpdateNote = async () => {
+    if (!selectedNote) return;
+    if (!form.title.trim()) {
+      Alert.alert(t('common.error'), t('notes.titleRequired'));
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await updateNote(selectedNote.id, {
+      title: form.title.trim(),
+      description: form.description.trim(),
+      status: form.status,
+      assignedToUid: form.assignedToUid || null,
+      assignedToName: form.assignedToName || '',
+    });
+    setLoading(false);
+
+    if (error) {
+      Alert.alert(t('common.error'), error);
+      return;
+    }
+
+    closeManageModal();
+  };
+
+  const renderAssigneeSelector = () => (
+    <View style={styles.statusRow}>
+      <TouchableOpacity
+        style={[styles.statusChip, !form.assignedToUid && styles.statusChipActive]}
+        onPress={() => handleAssignMember(null)}
+      >
+        <Text style={[styles.statusChipText, !form.assignedToUid && styles.statusChipTextActive]}>
+          {t('notes.noAssignee')}
+        </Text>
+      </TouchableOpacity>
+      {members.map((member) => {
+        const isActive = form.assignedToUid === member.uid;
+        return (
+          <TouchableOpacity
+            key={member.uid}
+            style={[styles.statusChip, isActive && styles.statusChipActive]}
+            onPress={() => handleAssignMember(member)}
+          >
+            <Text style={[styles.statusChipText, isActive && styles.statusChipTextActive]}>
+              {member.displayName}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
+  const canCollaborate = members.length > 1;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -112,7 +251,13 @@ export const NotesScreen = ({ navigation }) => {
           <Text style={styles.title}>{t('notes.title')}</Text>
           <Text style={styles.subtitle}>{t('notes.subtitle')}</Text>
         </View>
-        <TouchableOpacity onPress={() => setShowAddModal(true)} style={styles.addBtn}>
+        <TouchableOpacity
+          onPress={() => {
+            resetForm();
+            setShowAddModal(true);
+          }}
+          style={styles.addBtn}
+        >
           <Ionicons name="add" size={22} color={colors.primary} />
         </TouchableOpacity>
       </View>
@@ -131,6 +276,7 @@ export const NotesScreen = ({ navigation }) => {
               <TouchableOpacity
                 key={note.id}
                 activeOpacity={0.88}
+                onPress={() => openManageModal(note)}
                 onLongPress={() => handleDeleteNote(note)}
                 style={styles.noteCard}
               >
@@ -138,15 +284,31 @@ export const NotesScreen = ({ navigation }) => {
                 {note.description ? (
                   <Text style={styles.noteDescription} numberOfLines={4}>{note.description}</Text>
                 ) : null}
-                <Text style={styles.noteMeta}>{note.authorName || t('profile.fallbackUser')}</Text>
+                <Text style={styles.noteMeta}>
+                  {t('notes.noteCreatedBy', { name: note.authorName || t('profile.fallbackUser') })}
+                </Text>
+                <View style={styles.assigneeBadge}>
+                  <Ionicons name="person-outline" size={12} color={colors.primary} />
+                  <Text style={styles.assigneeBadgeText}>
+                    {note.assignedToName
+                      ? t('notes.noteAssignedTo', { name: note.assignedToName })
+                      : t('notes.noAssignee')}
+                  </Text>
+                </View>
                 <View style={styles.noteActions}>
                   {status !== 'todo' ? (
-                    <TouchableOpacity style={styles.noteActionBtn} onPress={() => handleMoveNote(note, BOARD_COLUMNS[BOARD_COLUMNS.indexOf(status) - 1])}>
+                    <TouchableOpacity
+                      style={styles.noteActionBtn}
+                      onPress={() => handleMoveNote(note, BOARD_COLUMNS[BOARD_COLUMNS.indexOf(status) - 1])}
+                    >
                       <Ionicons name="arrow-back" size={14} color={colors.textMuted} />
                     </TouchableOpacity>
                   ) : <View style={styles.noteActionSpacer} />}
                   {status !== 'done' ? (
-                    <TouchableOpacity style={styles.noteActionBtn} onPress={() => handleMoveNote(note, BOARD_COLUMNS[BOARD_COLUMNS.indexOf(status) + 1])}>
+                    <TouchableOpacity
+                      style={styles.noteActionBtn}
+                      onPress={() => handleMoveNote(note, BOARD_COLUMNS[BOARD_COLUMNS.indexOf(status) + 1])}
+                    >
                       <Ionicons name="arrow-forward" size={14} color={colors.primary} />
                     </TouchableOpacity>
                   ) : <View style={styles.noteActionSpacer} />}
@@ -160,6 +322,13 @@ export const NotesScreen = ({ navigation }) => {
           </View>
         ))}
       </ScrollView>
+
+      {!canCollaborate ? (
+        <View style={styles.infoBanner}>
+          <Ionicons name="people-outline" size={16} color={colors.primary} />
+          <Text style={styles.infoBannerText}>{t('notes.householdOnly')}</Text>
+        </View>
+      ) : null}
 
       <Modal visible={showAddModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -205,8 +374,73 @@ export const NotesScreen = ({ navigation }) => {
               ))}
             </View>
 
+            <Text style={styles.inputLabel}>{t('notes.assignedTo')}</Text>
+            <Text style={styles.inputHint}>{t('notes.assignHint')}</Text>
+            {renderAssigneeSelector()}
+
             <TouchableOpacity style={styles.saveBtn} onPress={handleAddNote} disabled={loading}>
               <Text style={styles.saveBtnText}>{loading ? t('common.loading') : t('notes.addNote')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showManageModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('notes.editNote')}</Text>
+              <TouchableOpacity onPress={closeManageModal}>
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputLabel}>{t('notes.noteTitle')}</Text>
+            <TextInput
+              style={styles.input}
+              value={form.title}
+              onChangeText={setField('title')}
+              placeholder={t('notes.noteTitlePlaceholder')}
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <Text style={styles.inputLabel}>{t('common.description')}</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={form.description}
+              onChangeText={setField('description')}
+              placeholder={t('notes.noteDescriptionPlaceholder')}
+              placeholderTextColor={colors.textMuted}
+              multiline
+            />
+
+            <Text style={styles.inputLabel}>{t('notes.statusLabel')}</Text>
+            <View style={styles.statusRow}>
+              {BOARD_COLUMNS.map((status) => (
+                <TouchableOpacity
+                  key={status}
+                  style={[styles.statusChip, form.status === status && styles.statusChipActive]}
+                  onPress={() => setField('status')(status)}
+                >
+                  <Text style={[styles.statusChipText, form.status === status && styles.statusChipTextActive]}>
+                    {t(`notes.status.${status}`)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.inputLabel}>{t('notes.assignedTo')}</Text>
+            {renderAssigneeSelector()}
+
+            <TouchableOpacity
+              style={[styles.saveBtn, styles.secondaryBtn]}
+              onPress={() => handleAssignMember({ uid: user?.uid, displayName: getCurrentUserName() })}
+            >
+              <Text style={styles.secondaryBtnText}>{t('notes.assignToMe')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.saveBtn} onPress={handleUpdateNote} disabled={loading}>
+              <Text style={styles.saveBtnText}>{loading ? t('common.loading') : t('notes.saveChanges')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -279,6 +513,18 @@ const createStyles = (colors) => StyleSheet.create({
   noteTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.semibold },
   noteDescription: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, marginTop: 6, lineHeight: 20 },
   noteMeta: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 10 },
+  assigneeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginTop: SPACING.xs,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: `${colors.primary}14`,
+  },
+  assigneeBadgeText: { color: colors.primary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.medium },
   noteActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: SPACING.sm },
   noteActionBtn: {
     width: 32,
@@ -311,6 +557,7 @@ const createStyles = (colors) => StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
   modalTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold },
   inputLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.medium, marginBottom: 6, marginTop: SPACING.sm },
+  inputHint: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginBottom: 2 },
   input: {
     backgroundColor: colors.background,
     borderWidth: 1,
@@ -342,6 +589,33 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
   },
   saveBtnText: { color: '#FFFFFF', fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.semibold },
+  secondaryBtn: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: SPACING.md,
+  },
+  secondaryBtnText: { color: colors.textPrimary, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.semibold },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: SPACING.lg,
+    marginBottom: SPACING.lg,
+    marginTop: -SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: `${colors.primary}12`,
+    borderWidth: 1,
+    borderColor: `${colors.primary}30`,
+  },
+  infoBannerText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.regular,
+  },
 });
 
 export default NotesScreen;

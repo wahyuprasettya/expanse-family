@@ -125,6 +125,40 @@ export const joinSharedHousehold = async ({ userId, ownerProfile }) => {
   }
 };
 
+export const getHouseholdMembers = async (householdId) => {
+  try {
+    if (!householdId) {
+      return { members: [], error: null };
+    }
+
+    const q = query(
+      collection(db, USERS_COLLECTION),
+      where('householdId', '==', householdId)
+    );
+    const snapshot = await getDocs(q);
+    const members = snapshot.docs.map((memberDoc) => {
+      const data = memberDoc.data();
+
+      return {
+        uid: memberDoc.id,
+        displayName: data.displayName || data.email || 'Pengguna',
+        email: data.email || '',
+        householdRole: data.householdRole || 'partner',
+      };
+    });
+
+    members.sort((a, b) => {
+      if (a.householdRole === 'owner' && b.householdRole !== 'owner') return -1;
+      if (a.householdRole !== 'owner' && b.householdRole === 'owner') return 1;
+      return a.displayName.localeCompare(b.displayName);
+    });
+
+    return { members, error: null };
+  } catch (error) {
+    return { members: [], error: error.message };
+  }
+};
+
 /**
  * Toggle biometric login
  */

@@ -42,7 +42,16 @@ export const subscribeToNotes = (accountId, callback) => {
   });
 };
 
-export const addNote = async ({ accountId, userId, authorName, title, description, status }) => {
+export const addNote = async ({
+  accountId,
+  userId,
+  authorName,
+  title,
+  description,
+  status,
+  assignedToUid = null,
+  assignedToName = '',
+}) => {
   try {
     const docRef = await addDoc(collection(db, NOTES_COLLECTION), {
       accountId,
@@ -51,6 +60,8 @@ export const addNote = async ({ accountId, userId, authorName, title, descriptio
       title,
       description: description || '',
       status,
+      assignedToUid,
+      assignedToName: assignedToName || '',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -63,7 +74,7 @@ export const addNote = async ({ accountId, userId, authorName, title, descriptio
       entityType: 'note',
       entityId: docRef.id,
       actorName: authorName || 'Member',
-      metadata: { status },
+      metadata: { status, assignedToUid, assignedToName: assignedToName || '' },
     });
 
     return { id: docRef.id, error: null };
