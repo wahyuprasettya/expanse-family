@@ -15,6 +15,27 @@ const NOTIFICATION_CHANNELS = {
   reminders: 'reminders',
 };
 
+const inspectExpoPushResponse = async (response, contextLabel) => {
+  if (!response.ok) {
+    const errorData = await response.text();
+    console.error(`Failed to send ${contextLabel}:`, errorData);
+    return { ok: false, errors: [errorData] };
+  }
+
+  const payload = await response.json();
+  const tickets = Array.isArray(payload?.data) ? payload.data : payload?.data ? [payload.data] : [];
+  const ticketErrors = tickets
+    .filter((ticket) => ticket?.status === 'error')
+    .map((ticket) => ticket?.message || ticket?.details?.error || 'Unknown Expo push error');
+
+  if (ticketErrors.length > 0) {
+    console.error(`Expo push ticket errors for ${contextLabel}:`, ticketErrors, payload);
+    return { ok: false, errors: ticketErrors, payload };
+  }
+
+  return { ok: true, errors: [], payload };
+};
+
 // Configure notification handler
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -77,11 +98,16 @@ export const registerForPushNotifications = async (userId) => {
     return null;
   }
 
-  const tokenData = await Notifications.getExpoPushTokenAsync({
-    projectId,
-  });
-
-  const token = tokenData.data;
+  let token = null;
+  try {
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId,
+    });
+    token = tokenData.data;
+  } catch (error) {
+    console.error('Failed to fetch Expo push token:', error);
+    return null;
+  }
 
   // Save token to Firestore
   if (userId && token) {
@@ -120,6 +146,7 @@ export const sendPushNotificationToUser = async (userId, notification) => {
 
     const userData = userSnapshot.data();
     if (!userData?.expoPushToken) {
+      console.warn('Push notification skipped because recipient has no Expo push token:', userId);
       return;
     }
 
@@ -135,16 +162,10 @@ export const sendPushNotificationToUser = async (userId, notification) => {
         data: notification.data || {},
         sound: 'default',
         channelId: notification.channelId || NOTIFICATION_CHANNELS.default,
-        priority: 'default',
+        priority: 'high',
       }),
     });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error('Failed to send direct push notification:', errorData);
-    } else {
-      await response.json();
-    }
+    await inspectExpoPushResponse(response, `direct push to user ${userId}`);
   } catch (error) {
     console.error('Error sending direct push notification:', error);
   }
@@ -237,6 +258,11 @@ export const sendHouseholdNotification = async (householdId, senderUid, notifica
     const pushRecipients = recipients.filter((member) => member.expoPushToken);
 
     if (pushRecipients.length === 0) {
+      console.warn('Household push skipped because no recipients have Expo push tokens:', {
+        householdId,
+        senderUid,
+        recipientCount: recipients.length,
+      });
       return;
     }
 
@@ -248,7 +274,7 @@ export const sendHouseholdNotification = async (householdId, senderUid, notifica
       data: notification.data || {},
       sound: 'default',
       channelId: notification.channelId || NOTIFICATION_CHANNELS.transactions,
-      priority: 'default',
+      priority: 'high',
     }));
 
     // Send to Expo push notification service
@@ -260,12 +286,7 @@ export const sendHouseholdNotification = async (householdId, senderUid, notifica
       body: JSON.stringify(messages),
     });
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error('Failed to send push notifications:', errorData);
-    } else {
-      await response.json();
-    }
+    await inspectExpoPushResponse(response, `household push for ${householdId}`);
 
   } catch (error) {
     console.error('Error sending household notification:', error);
