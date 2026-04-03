@@ -15,22 +15,15 @@ export const useTransactionSync = () => {
 
   useEffect(() => {
     if (!accountId) {
-      console.log('[useTransactionSync] subscribe:clear');
       dispatch(setTransactions([]));
       return undefined;
     }
 
-    console.log('[useTransactionSync] subscribe:start', { accountId });
     const unsubscribe = subscribeToTransactions(accountId, (txs) => {
-      console.log('[useTransactionSync] subscribe:update', {
-        accountId,
-        count: txs.length,
-      });
       dispatch(setTransactions(txs));
     });
 
     return () => {
-      console.log('[useTransactionSync] subscribe:stop', { accountId });
       unsubscribe();
     };
   }, [accountId, dispatch]);

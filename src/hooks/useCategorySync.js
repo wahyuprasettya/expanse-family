@@ -14,17 +14,11 @@ export const useCategorySync = () => {
   useEffect(() => {
     if (!user?.uid) return undefined;
 
-    console.log('[useCategorySync] subscribe:start', { userId: user.uid });
     const unsubscribe = subscribeToCategories(user.uid, (categories) => {
-      console.log('[useCategorySync] subscribe:update', {
-        userId: user.uid,
-        count: categories.length,
-      });
       dispatch(setCategories(categories));
     });
 
     return () => {
-      console.log('[useCategorySync] subscribe:stop', { userId: user.uid });
       unsubscribe();
     };
   }, [dispatch, user?.uid]);

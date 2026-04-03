@@ -24,7 +24,6 @@ export const useLegacyCleanup = () => {
           return;
         }
 
-        console.log('[useLegacyCleanup] chat-cleanup:done', { accountId, count });
       })
       .catch((error) => {
         console.warn('[useLegacyCleanup] chat-cleanup:unexpected', {

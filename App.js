@@ -55,7 +55,6 @@ const AppContent = () => {
     // Handle notification responses (when user taps a notification)
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
-      console.log('Notification tapped:', data);
       // Navigate based on data.type if needed
     });
     return () => subscription.remove();

@@ -61,31 +61,6 @@ export const HomeScreen = ({ navigation }) => {
     });
   }, [transactions, categories, t]);
 
-  useEffect(() => {
-    const duplicateIds = recentTransactions.reduce((acc, tx) => {
-      acc[tx.id] = (acc[tx.id] || 0) + 1;
-      return acc;
-    }, {});
-    const duplicateRequestIds = recentTransactions.reduce((acc, tx) => {
-      if (!tx.clientRequestId) return acc;
-      acc[tx.clientRequestId] = (acc[tx.clientRequestId] || 0) + 1;
-      return acc;
-    }, {});
-
-    console.log('[HomeScreen] recentTransactions', {
-      totalTransactionsInStore: transactions.length,
-      renderedRecentCount: recentTransactions.length,
-      ids: recentTransactions.map((tx) => tx.id),
-      clientRequestIds: recentTransactions.map((tx) => tx.clientRequestId || null),
-      duplicateIds: Object.entries(duplicateIds)
-        .filter(([, count]) => count > 1)
-        .map(([id, count]) => ({ id, count })),
-      duplicateClientRequestIds: Object.entries(duplicateRequestIds)
-        .filter(([, count]) => count > 1)
-        .map(([clientRequestId, count]) => ({ clientRequestId, count })),
-    });
-  }, [recentTransactions, transactions.length]);
-
   const handleDelete = (transactionId) => {
     Alert.alert(t('transactions.deleteTitle'), t('transactions.deleteMessage'), [
       { text: t('common.cancel'), style: 'cancel' },

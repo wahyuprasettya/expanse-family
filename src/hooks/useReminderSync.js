@@ -14,17 +14,11 @@ export const useReminderSync = () => {
   useEffect(() => {
     if (!user?.uid) return undefined;
 
-    console.log('[useReminderSync] subscribe:start', { userId: user.uid });
     const unsubscribe = subscribeToReminders(user.uid, (reminders) => {
-      console.log('[useReminderSync] subscribe:update', {
-        userId: user.uid,
-        count: reminders.length,
-      });
       dispatch(setReminders(reminders));
     });
 
     return () => {
-      console.log('[useReminderSync] subscribe:stop', { userId: user.uid });
       unsubscribe();
     };
   }, [dispatch, user?.uid]);

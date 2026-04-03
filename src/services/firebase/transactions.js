@@ -27,16 +27,6 @@ const buildTransactionDocId = (accountId, clientRequestId) => `tx_${accountId}_$
 // ─── Add Transaction ─────────────────────────────────────────
 export const addTransaction = async (accountId, actor, transactionData) => {
   try {
-    console.log('[tx:add] request:start', {
-      accountId,
-      actorUid: actor?.uid,
-      clientRequestId: transactionData.clientRequestId || null,
-      type: transactionData.type,
-      amount: transactionData.amount,
-      categoryId: transactionData.categoryId,
-      date: transactionData.date,
-    });
-
     const now = serverTimestamp();
     const payload = {
       userId: actor.uid,
@@ -63,10 +53,6 @@ export const addTransaction = async (accountId, actor, transactionData) => {
       const ref = doc(db, TRANSACTIONS_COLLECTION, transactionId);
       const existingDoc = await getDoc(ref);
       if (existingDoc.exists()) {
-        console.log('[tx:add] request:dedup-hit', {
-          clientRequestId: transactionData.clientRequestId,
-          existingId: transactionId,
-        });
         return { id: transactionId, error: null };
       }
 
@@ -87,16 +73,8 @@ export const addTransaction = async (accountId, actor, transactionData) => {
       actorUid: actor.uid,
       metadata: { householdId: accountId },
     });
-    console.log('[tx:add] request:created', {
-      id: transactionId,
-      clientRequestId: transactionData.clientRequestId || null,
-    });
     return { id: transactionId, error: null };
   } catch (error) {
-    console.log('[tx:add] request:error', {
-      clientRequestId: transactionData.clientRequestId || null,
-      message: error.message,
-    });
     return { id: null, error: error.message };
   }
 };
@@ -175,20 +153,6 @@ export const subscribeToTransactions = (accountId, callback, filters = {}) => {
       createdAt: doc.data().createdAt?.toDate?.()?.toISOString?.() || null,
       updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString?.() || null,
     }));
-    const duplicateClientRequestIds = transactions.reduce((acc, tx) => {
-      if (!tx.clientRequestId) return acc;
-      acc[tx.clientRequestId] = (acc[tx.clientRequestId] || 0) + 1;
-      return acc;
-    }, {});
-
-    console.log('[tx:subscribe] snapshot', {
-      accountId,
-      total: transactions.length,
-      ids: transactions.map((tx) => tx.id),
-      duplicateClientRequestIds: Object.entries(duplicateClientRequestIds)
-        .filter(([, count]) => count > 1)
-        .map(([clientRequestId, count]) => ({ clientRequestId, count })),
-    });
     callback(transactions);
   });
 };

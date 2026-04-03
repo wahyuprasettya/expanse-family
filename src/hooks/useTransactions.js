@@ -26,28 +26,10 @@ export const useTransactions = () => {
   const addTransaction = async (data) => {
     if (!user?.uid || !accountId) return { error: 'Not authenticated' };
 
-    console.log('[useTransactions] addTransaction:call', {
-      accountId,
-      userUid: user.uid,
-      clientRequestId: data.clientRequestId || null,
-      type: data.type,
-      amount: data.amount,
-      categoryId: data.categoryId,
-    });
-
     const { id, error } = await addTxService(accountId, user, data);
     if (error) {
-      console.log('[useTransactions] addTransaction:error', {
-        clientRequestId: data.clientRequestId || null,
-        error,
-      });
       return { error };
     }
-
-    console.log('[useTransactions] addTransaction:success', {
-      id,
-      clientRequestId: data.clientRequestId || null,
-    });
 
     const newTx = {
       id,

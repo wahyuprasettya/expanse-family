@@ -106,12 +106,6 @@ export const AddTransactionScreen = ({ navigation, route }) => {
     if (!submissionKeyRef.current) {
       submissionKeyRef.current = `tx-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     }
-    console.log('[AddTransactionScreen] submit', {
-      clientRequestId: submissionKeyRef.current,
-      type,
-      amount,
-      categoryId: selectedCategory?.id || null,
-    });
     isSubmittingRef.current = true;
     setLoading(true);
     let error = null;
