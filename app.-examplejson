@@ -1,0 +1,78 @@
+// {
+//   "expo": {
+//     "name": "WP App",
+//     "slug": "app-money",
+//     "version": "1.0.0",
+//     "orientation": "portrait",
+//     "icon": "./assets/icon.png",
+//     "userInterfaceStyle": "automatic",
+//     "splash": {
+//       "image": "./assets/splash.png",
+//       "resizeMode": "contain",
+//       "backgroundColor": "#0F172A"
+//     },
+//     "plugins": [
+//       "expo-font",
+//       [
+//         "expo-local-authentication",
+//         {
+//           "faceIDPermission": "Allow WP App to use Face ID for secure login"
+//         }
+//       ],
+//       [
+//         "expo-camera",
+//         {
+//           "cameraPermission": "Allow WP App to access your camera to scan receipts"
+//         }
+//       ],
+//       [
+//         "expo-notifications",
+//         {
+//           "icon": "./assets/icon.png",
+//           "color": "#6366F1",
+//           "sounds": []
+//         }
+//       ],
+//       "expo-secure-store"
+//     ],
+//     "android": {
+//       "googleServicesFile": "./google-services.json",
+//       "adaptiveIcon": {
+//         "foregroundImage": "./assets/adaptive-icon.png",
+//         "backgroundColor": "#0F172A"
+//       },
+//       "package": "com.wahyuadjie.appmoney",
+//       "permissions": [
+//         "android.permission.USE_BIOMETRIC",
+//         "android.permission.USE_FINGERPRINT",
+//         "android.permission.CAMERA",
+//         "android.permission.RECEIVE_BOOT_COMPLETED",
+//         "android.permission.VIBRATE",
+//         "android.permission.RECORD_AUDIO"
+//       ]
+//     },
+//     "ios": {
+//       "supportsTablet": false,
+//       "bundleIdentifier": "com.wahyu.wapmoney"
+//     },
+//     "web": {
+//       "favicon": "./assets/favicon.png",
+//       "bundler": "metro"
+//     },
+//     "scheme": "wpmoney",
+//     "extra": {
+//       "eas": {
+//         "projectId": "2af2f454-c552-4314-b167-f44a077a025c"
+//       }
+//     },
+//     "owner": "wahyuadjie",
+//     "runtimeVersion": {
+//       "policy": "appVersion"
+//     },
+//     "updates": {
+//       "url": "https://u.expo.dev/2af2f454-c552-4314-b167-f44a077a025c",
+//       "checkAutomatically": "ON_LOAD",
+//       "fallbackToCacheTimeout": 0
+//     }
+//   }
+// }

@@ -63,16 +63,11 @@ export const ForgotPasswordScreen = ({ navigation }) => {
     <LinearGradient colors={colors.gradients.header} style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Header */}
           <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <Text style={styles.logoEmoji}>🔐</Text>
-            </View>
             <Text style={styles.title}>{t('auth.resetPasswordTitle')}</Text>
             <Text style={styles.subtitle}>{t('auth.resetPasswordSubtitle')}</Text>
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
             <Input
               label={t('auth.email')}
@@ -110,17 +105,6 @@ const createStyles = (colors) => StyleSheet.create({
   flex: { flex: 1 },
   scroll: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingTop: 60 },
   header: { alignItems: 'center', marginBottom: SPACING.xxl },
-  logoContainer: {
-    width: 80, height: 80,
-    borderRadius: BORDER_RADIUS.xl,
-    backgroundColor: `${colors.primary}30`,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: `${colors.primary}50`,
-  },
-  logoEmoji: { fontSize: 40 },
   title: {
     fontSize: FONT_SIZE.xxxl,
     fontFamily: FONT_FAMILY.extrabold,
