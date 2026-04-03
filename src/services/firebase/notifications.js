@@ -15,6 +15,11 @@ const NOTIFICATION_CHANNELS = {
   reminders: 'reminders',
 };
 
+const resolveExpoProjectId = () =>
+  Constants.expoConfig?.extra?.eas?.projectId ||
+  Constants.easConfig?.projectId ||
+  null;
+
 const inspectExpoPushResponse = async (response, contextLabel) => {
   if (!response.ok) {
     const errorData = await response.text();
@@ -89,9 +94,7 @@ export const registerForPushNotifications = async (userId) => {
   }
 
   // Get Expo push token
-  const projectId =
-    Constants.expoConfig?.extra?.eas?.projectId ||
-    Constants.easConfig?.projectId;
+  const projectId = resolveExpoProjectId();
 
   if (!projectId) {
     console.warn('Expo projectId is missing; cannot fetch Expo push token');
@@ -120,6 +123,64 @@ export const registerForPushNotifications = async (userId) => {
   return token;
 };
 
+export const getStoredPushToken = async (userId) => {
+  if (!userId) {
+    return { token: null, error: 'userId is required' };
+  }
+
+  try {
+    const userSnapshot = await getDoc(doc(db, 'users', userId));
+    if (!userSnapshot.exists()) {
+      return { token: null, error: 'User not found' };
+    }
+
+    return {
+      token: userSnapshot.data()?.expoPushToken || null,
+      error: null,
+    };
+  } catch (error) {
+    return { token: null, error: error.message };
+  }
+};
+
+export const getPushDebugStatus = async (userId) => {
+  const permission = await Notifications.getPermissionsAsync();
+  const projectId = resolveExpoProjectId();
+  const { token: storedToken, error: storedTokenError } = userId
+    ? await getStoredPushToken(userId)
+    : { token: null, error: 'userId is required' };
+
+  let freshToken = null;
+  let fetchError = null;
+
+  if (!Device.isDevice) {
+    fetchError = 'Push notifications only work on physical devices';
+  } else if (permission.status !== 'granted') {
+    fetchError = 'Push notification permission is not granted';
+  } else if (!projectId) {
+    fetchError = 'Expo projectId is missing';
+  } else {
+    try {
+      const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+      freshToken = tokenData.data;
+    } catch (error) {
+      fetchError = error.message;
+    }
+  }
+
+  return {
+    isDevice: Device.isDevice,
+    platform: Platform.OS,
+    permissionStatus: permission.status,
+    projectId,
+    storedToken,
+    storedTokenError,
+    freshToken,
+    fetchError,
+    matchesStoredToken: Boolean(freshToken && storedToken && freshToken === storedToken),
+  };
+};
+
 // ─── Send Local Notification ─────────────────────────────────
 export const sendTransactionNotification = async (transaction) => {
   await Notifications.scheduleNotificationAsync({
@@ -131,6 +192,35 @@ export const sendTransactionNotification = async (transaction) => {
     },
     trigger: null,
   });
+};
+
+export const sendPushNotificationToToken = async (token, notification) => {
+  if (!token) {
+    return { ok: false, errors: ['Expo push token is required'] };
+  }
+
+  try {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: token,
+        title: notification.title,
+        body: notification.body,
+        data: notification.data || {},
+        sound: 'default',
+        channelId: notification.channelId || NOTIFICATION_CHANNELS.default,
+        priority: 'high',
+      }),
+    });
+
+    return inspectExpoPushResponse(response, `direct push to token ${token.slice(0, 16)}...`);
+  } catch (error) {
+    console.error('Error sending direct push notification to token:', error);
+    return { ok: false, errors: [error.message] };
+  }
 };
 
 export const sendPushNotificationToUser = async (userId, notification) => {
@@ -150,22 +240,7 @@ export const sendPushNotificationToUser = async (userId, notification) => {
       return;
     }
 
-    const response = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: userData.expoPushToken,
-        title: notification.title,
-        body: notification.body,
-        data: notification.data || {},
-        sound: 'default',
-        channelId: notification.channelId || NOTIFICATION_CHANNELS.default,
-        priority: 'high',
-      }),
-    });
-    await inspectExpoPushResponse(response, `direct push to user ${userId}`);
+    await sendPushNotificationToToken(userData.expoPushToken, notification);
   } catch (error) {
     console.error('Error sending direct push notification:', error);
   }

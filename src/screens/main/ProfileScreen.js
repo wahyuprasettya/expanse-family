@@ -40,6 +40,11 @@ import {
   updateThemePreference,
   updateBiometricEnabled,
 } from "@services/firebase/users";
+import {
+  registerForPushNotifications,
+  getPushDebugStatus,
+  sendPushNotificationToToken,
+} from "@services/firebase/notifications";
 import { logoutUser } from "@services/firebase/auth";
 import { useAppTheme } from "@hooks/useAppTheme";
 import { useBiometric } from "@hooks/useBiometric";
@@ -95,7 +100,159 @@ export const ProfileScreen = ({ navigation }) => {
   const [editName, setEditName] = useState(user?.displayName || "");
   const [editEmail, setEditEmail] = useState(user?.email || "");
   const [loading, setLoading] = useState(false);
+  const [pushDebugLoading, setPushDebugLoading] = useState(false);
+  const [pushDebugInfo, setPushDebugInfo] = useState(null);
   const notAuthenticatedMessage = language === "en" ? "Please sign in again." : "Silakan login kembali.";
+  const affirmativeLabel = language === "en" ? "Yes" : "Ya";
+  const negativeLabel = language === "en" ? "No" : "Tidak";
+
+  const formatTokenPreview = (token) =>
+    token ? `${token.slice(0, 18)}...${token.slice(-8)}` : "-";
+
+  const getPushDebugSubtitle = () => {
+    if (pushDebugLoading) return t("common.loading");
+    if (!pushDebugInfo) return t("profile.pushDebugSubtitle");
+    if (pushDebugInfo.permissionStatus !== "granted") {
+      return t("profile.pushDebugPermissionDenied");
+    }
+    if (pushDebugInfo.fetchError || pushDebugInfo.storedTokenError) {
+      return t("profile.pushDebugError");
+    }
+    if (pushDebugInfo.matchesStoredToken) {
+      return t("profile.pushDebugReady");
+    }
+    if (pushDebugInfo.freshToken && !pushDebugInfo.storedToken) {
+      return t("profile.pushDebugMissingStoredToken");
+    }
+    if (pushDebugInfo.freshToken && pushDebugInfo.storedToken) {
+      return t("profile.pushDebugOutOfSync");
+    }
+    return t("profile.pushDebugSubtitle");
+  };
+
+  const refreshPushDebugInfo = async () => {
+    if (!user?.uid) {
+      throw new Error(notAuthenticatedMessage);
+    }
+
+    const status = await getPushDebugStatus(user.uid);
+    setPushDebugInfo(status);
+    return status;
+  };
+
+  const handleSyncPushToken = async () => {
+    if (!user?.uid) {
+      Alert.alert(t("common.error"), notAuthenticatedMessage);
+      return;
+    }
+
+    setPushDebugLoading(true);
+    let syncedToken = null;
+
+    try {
+      syncedToken = await registerForPushNotifications(user.uid);
+      const status = await refreshPushDebugInfo();
+
+      if (!syncedToken) {
+        Alert.alert(
+          t("common.error"),
+          status.fetchError || status.storedTokenError || t("profile.pushTokenSyncFailed")
+        );
+        return;
+      }
+
+      Alert.alert(t("common.success"), t("profile.pushTokenSynced"));
+    } catch (error) {
+      Alert.alert(t("common.error"), error.message || t("profile.pushTokenSyncFailed"));
+    } finally {
+      setPushDebugLoading(false);
+    }
+  };
+
+  const handleCheckPushDebug = async () => {
+    if (!user?.uid) {
+      Alert.alert(t("common.error"), notAuthenticatedMessage);
+      return;
+    }
+
+    setPushDebugLoading(true);
+    try {
+      const status = await refreshPushDebugInfo();
+      const message = [
+        `Platform: ${status.platform}`,
+        `${language === "en" ? "Physical device" : "Perangkat fisik"}: ${status.isDevice ? affirmativeLabel : negativeLabel}`,
+        `${language === "en" ? "Notification permission" : "Izin notifikasi"}: ${status.permissionStatus || "-"}`,
+        `${language === "en" ? "Project ID" : "Project ID"}: ${status.projectId || "-"}`,
+        `${language === "en" ? "Stored token" : "Token tersimpan"}: ${formatTokenPreview(status.storedToken)}`,
+        `${language === "en" ? "Active token" : "Token aktif"}: ${formatTokenPreview(status.freshToken)}`,
+        `${language === "en" ? "Token match" : "Token sama"}: ${status.matchesStoredToken ? affirmativeLabel : negativeLabel}`,
+        status.fetchError
+          ? `${language === "en" ? "Token error" : "Error token"}: ${status.fetchError}`
+          : null,
+        status.storedTokenError
+          ? `${language === "en" ? "Stored token error" : "Error token tersimpan"}: ${status.storedTokenError}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      Alert.alert(t("profile.pushDebug"), message, [
+        {
+          text: t("profile.syncPushToken"),
+          onPress: () => {
+            void handleSyncPushToken();
+          },
+        },
+        { text: "OK" },
+      ]);
+    } catch (error) {
+      Alert.alert(t("common.error"), error.message || t("profile.pushDebugError"));
+    } finally {
+      setPushDebugLoading(false);
+    }
+  };
+
+  const handleSendTestNotification = async () => {
+    if (!user?.uid) {
+      Alert.alert(t("common.error"), notAuthenticatedMessage);
+      return;
+    }
+
+    setPushDebugLoading(true);
+    try {
+      const token = await registerForPushNotifications(user.uid);
+      const status = await refreshPushDebugInfo();
+
+      if (!token) {
+        Alert.alert(
+          t("common.error"),
+          status.fetchError || status.storedTokenError || t("profile.pushTokenSyncFailed")
+        );
+        return;
+      }
+
+      const result = await sendPushNotificationToToken(token, {
+        title: t("profile.testNotificationTitle"),
+        body: t("profile.testNotificationBody"),
+        channelId: "transactions",
+        data: {
+          type: "debug_test",
+          userId: user.uid,
+        },
+      });
+
+      if (!result.ok) {
+        Alert.alert(t("common.error"), (result.errors || []).join("\n") || t("profile.pushDebugError"));
+        return;
+      }
+
+      Alert.alert(t("common.success"), t("profile.testNotificationSent"));
+    } catch (error) {
+      Alert.alert(t("common.error"), error.message || t("profile.pushDebugError"));
+    } finally {
+      setPushDebugLoading(false);
+    }
+  };
 
   const handleConfirmLogout = async () => {
     const { error } = await logoutUser();
@@ -361,6 +518,29 @@ export const ProfileScreen = ({ navigation }) => {
                   thumbColor="#FFF"
                 />
               }
+            />
+            <SettingRow
+              colors={colors}
+              styles={styles}
+              icon="bug-outline"
+              label={t("profile.pushDebug")}
+              subtitle={getPushDebugSubtitle()}
+              color={colors.info}
+              onPress={handleCheckPushDebug}
+              rightElement={
+                pushDebugLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : undefined
+              }
+            />
+            <SettingRow
+              colors={colors}
+              styles={styles}
+              icon="paper-plane-outline"
+              label={t("profile.testNotification")}
+              subtitle={t("profile.testNotificationSubtitle")}
+              color={colors.secondary}
+              onPress={handleSendTestNotification}
             />
             <SettingRow
               colors={colors}
