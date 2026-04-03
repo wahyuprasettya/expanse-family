@@ -258,6 +258,16 @@ export const translations = {
       billTitle: '💸 Pengingat Tagihan',
       debtBody: '{{name}} jatuh tempo dalam {{days}} hari. Nominal: {{amount}}',
       billBody: '{{name}} jatuh tempo dalam {{days}} hari. Nominal: {{amount}}',
+      householdAddedTitle: '🔔 {{name}} menambahkan reminder',
+      householdAddedBody: '{{reminder}} · jatuh tempo {{date}}',
+      householdDeletedTitle: '🗑️ {{name}} menghapus reminder',
+      householdDeletedBody: '{{reminder}} dihapus',
+    },
+    assetNotification: {
+      householdAddedTitle: '💼 {{name}} menambahkan aset',
+      householdAddedBody: '{{asset}} · nilai {{amount}}',
+      householdDeletedTitle: '🗑️ {{name}} menghapus aset',
+      householdDeletedBody: '{{asset}} dihapus',
     },
     transactionNotification: {
       expenseTitle: 'Transaksi Pengeluaran Baru',
@@ -707,6 +717,16 @@ export const translations = {
       billTitle: '💸 Bill Reminder',
       debtBody: '{{name}} is due in {{days}} day(s). Amount: {{amount}}',
       billBody: '{{name}} is due in {{days}} day(s). Amount: {{amount}}',
+      householdAddedTitle: '🔔 {{name}} added a reminder',
+      householdAddedBody: '{{reminder}} · due {{date}}',
+      householdDeletedTitle: '🗑️ {{name}} deleted a reminder',
+      householdDeletedBody: '{{reminder}} was removed',
+    },
+    assetNotification: {
+      householdAddedTitle: '💼 {{name}} added an asset',
+      householdAddedBody: '{{asset}} · value {{amount}}',
+      householdDeletedTitle: '🗑️ {{name}} deleted an asset',
+      householdDeletedBody: '{{asset}} was removed',
     },
     transactionNotification: {
       expenseTitle: 'New Expense Added',

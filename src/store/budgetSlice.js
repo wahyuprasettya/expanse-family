@@ -2,6 +2,10 @@
 // Budget Slice
 // ============================================================
 import { createSlice, createSelector } from '@reduxjs/toolkit';
+import { serializeFirestoreValue } from '@utils/firestore';
+
+const sanitizeBudget = (budget) => serializeFirestoreValue(budget);
+const sanitizeBudgets = (budgets) => Array.isArray(budgets) ? budgets.map(sanitizeBudget) : [];
 
 const budgetSlice = createSlice({
   name: 'budgets',
@@ -11,11 +15,11 @@ const budgetSlice = createSlice({
     error: null,
   },
   reducers: {
-    setBudgets: (state, action) => { state.items = action.payload; },
-    addBudgetLocal: (state, action) => { state.items.push(action.payload); },
+    setBudgets: (state, action) => { state.items = sanitizeBudgets(action.payload); },
+    addBudgetLocal: (state, action) => { state.items.push(sanitizeBudget(action.payload)); },
     updateBudgetLocal: (state, action) => {
       const idx = state.items.findIndex((b) => b.id === action.payload.id);
-      if (idx !== -1) state.items[idx] = { ...state.items[idx], ...action.payload };
+      if (idx !== -1) state.items[idx] = sanitizeBudget({ ...state.items[idx], ...action.payload });
     },
     removeBudgetLocal: (state, action) => {
       state.items = state.items.filter((b) => b.id !== action.payload);

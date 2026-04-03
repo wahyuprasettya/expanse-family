@@ -10,9 +10,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
-import { selectUser } from '@store/authSlice';
+import { selectProfile, selectUser } from '@store/authSlice';
 import { selectReminders, selectRemindersLoading, removeReminderLocal } from '@store/reminderSlice';
 import { addReminder, deleteReminder } from '@services/firebase/reminders';
+import { sendHouseholdNotification } from '@services/firebase/notifications';
 import Input from '@components/common/Input';
 import Button from '@components/common/Button';
 import LoadingState from '@components/common/LoadingState';
@@ -28,8 +29,10 @@ export const RemindersScreen = ({ navigation }) => {
   const { t, language } = useTranslation();
   const styles = createStyles(colors);
   const user = useSelector(selectUser);
+  const profile = useSelector(selectProfile);
   const reminders = useSelector(selectReminders);
   const remindersLoading = useSelector(selectRemindersLoading);
+  const accountId = profile?.householdId || user?.uid;
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -56,8 +59,30 @@ export const RemindersScreen = ({ navigation }) => {
       daysBefore: parseInt(form.daysBefore) || 1,
     }, t);
     setLoading(false);
-    if (error) Alert.alert(t('common.error'), error);
-    else { setShowAddModal(false); setForm({ name: '', amount: '', category: 'Bills', dueDate: new Date().toISOString(), daysBefore: '1', isRecurring: true }); }
+    if (error) {
+      Alert.alert(t('common.error'), error);
+    } else {
+      try {
+        await sendHouseholdNotification(accountId, user.uid, {
+          title: t('reminderNotification.householdAddedTitle', {
+            name: user.displayName || t('profile.fallbackUser'),
+          }),
+          body: t('reminderNotification.householdAddedBody', {
+            reminder: form.name.trim(),
+            date: formatDateSmart(form.dueDate, language),
+          }),
+          data: {
+            type: 'household_reminder',
+            action: 'added',
+          },
+        });
+      } catch (sideEffectError) {
+        console.warn('Reminder household notification failed:', sideEffectError);
+      }
+
+      setShowAddModal(false);
+      setForm({ name: '', amount: '', category: 'Bills', dueDate: new Date().toISOString(), daysBefore: '1', isRecurring: true });
+    }
   };
 
   const handleDelete = (r) => {
@@ -66,8 +91,29 @@ export const RemindersScreen = ({ navigation }) => {
       {
         text: t('common.delete'), style: 'destructive',
         onPress: async () => {
-          await deleteReminder(r.id, r.notificationId);
+          const { error } = await deleteReminder(r.id, r.notificationId);
+          if (error) {
+            Alert.alert(t('common.error'), error);
+            return;
+          }
+
           dispatch(removeReminderLocal(r.id));
+          try {
+            await sendHouseholdNotification(accountId, user.uid, {
+              title: t('reminderNotification.householdDeletedTitle', {
+                name: user.displayName || t('profile.fallbackUser'),
+              }),
+              body: t('reminderNotification.householdDeletedBody', {
+                reminder: r.name,
+              }),
+              data: {
+                type: 'household_reminder',
+                action: 'deleted',
+              },
+            });
+          } catch (sideEffectError) {
+            console.warn('Reminder delete household notification failed:', sideEffectError);
+          }
         },
       },
     ]);

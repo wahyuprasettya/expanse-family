@@ -16,9 +16,71 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 import { logAppNotification } from './appNotifications';
-import { sendPushNotificationToUser } from './notifications';
+import { sendHouseholdNotification, sendPushNotificationToUser } from './notifications';
 
 const NOTES_COLLECTION = 'notes';
+const DEFAULT_MEMBER_NAME = 'Member';
+const DEFAULT_ASSIGNEE_NAME = 'anggota tim';
+
+const buildAssignmentMessage = (actorName, assignedToName, noteTitle) =>
+  `${actorName} menugaskan ${assignedToName || DEFAULT_ASSIGNEE_NAME} terkait "${noteTitle}"`;
+
+const sendNoteAssignmentNotifications = async ({
+  accountId,
+  noteId,
+  noteTitle,
+  actorUserId = null,
+  actorName = DEFAULT_MEMBER_NAME,
+  assignedToUid,
+  assignedToName = '',
+  status = 'todo',
+}) => {
+  if (!assignedToUid) {
+    return;
+  }
+
+  const assignmentMessage = buildAssignmentMessage(actorName, assignedToName, noteTitle);
+
+  await logAppNotification({
+    userId: assignedToUid,
+    title: 'Tugas baru untukmu',
+    body: assignmentMessage,
+    action: 'assign',
+    entityType: 'note_assignment',
+    entityId: noteId,
+    actorName,
+    actorUid: actorUserId,
+    metadata: { status, title: noteTitle, assignedToName },
+  });
+
+  await sendPushNotificationToUser(assignedToUid, {
+    title: '📝 Tugas baru untukmu',
+    body: assignmentMessage,
+    data: {
+      type: 'note_assignment',
+      noteId,
+      action: 'assigned',
+    },
+  });
+
+  if (accountId) {
+    await sendHouseholdNotification(
+      accountId,
+      actorUserId,
+      {
+        title: '📝 Update catatan tim',
+        body: assignmentMessage,
+        data: {
+          type: 'note_assignment',
+          noteId,
+          action: 'assigned',
+          assignedToUid,
+        },
+      },
+      { excludeUserIds: [assignedToUid] }
+    );
+  }
+};
 
 const serializeNote = (noteDoc) => {
   const data = noteDoc.data();
@@ -78,29 +140,16 @@ export const addNote = async ({
       metadata: { status, assignedToUid, assignedToName: assignedToName || '' },
     });
 
-    if (assignedToUid && assignedToUid !== userId) {
-      await logAppNotification({
-        userId: assignedToUid,
-        title: 'Tugas baru untukmu',
-        body: `${authorName || 'Member'} menugaskan: ${title}`,
-        action: 'assign',
-        entityType: 'note_assignment',
-        entityId: docRef.id,
-        actorName: authorName || 'Member',
-        actorUid: userId,
-        metadata: { status, title, assignedToName: assignedToName || '' },
-      });
-
-      await sendPushNotificationToUser(assignedToUid, {
-        title: '📝 Tugas baru untukmu',
-        body: `${authorName || 'Member'} menugaskan "${title}"`,
-        data: {
-          type: 'note_assignment',
-          noteId: docRef.id,
-          action: 'assigned',
-        },
-      });
-    }
+    await sendNoteAssignmentNotifications({
+      accountId,
+      noteId: docRef.id,
+      noteTitle: title,
+      actorUserId: userId,
+      actorName: authorName || DEFAULT_MEMBER_NAME,
+      assignedToUid,
+      assignedToName: assignedToName || '',
+      status,
+    });
 
     return { id: docRef.id, error: null };
   } catch (error) {
@@ -122,39 +171,20 @@ export const updateNote = async (noteId, updates, actor = {}) => {
     const nextAssignedToUid = updates.assignedToUid ?? previous?.assignedToUid ?? null;
     const assignmentChanged = previous?.assignedToUid !== nextAssignedToUid;
 
-    if (
-      assignmentChanged &&
-      nextAssignedToUid &&
-      nextAssignedToUid !== actor.userId
-    ) {
+    if (assignmentChanged && nextAssignedToUid) {
       const noteTitle = updates.title || previous?.title || 'Catatan';
-      const actorName = actor.authorName || previous?.authorName || 'Member';
+      const actorName = actor.authorName || previous?.authorName || DEFAULT_MEMBER_NAME;
       const assignedToName = updates.assignedToName || previous?.assignedToName || '';
 
-      await logAppNotification({
-        userId: nextAssignedToUid,
-        title: 'Tugas baru untukmu',
-        body: `${actorName} menugaskan: ${noteTitle}`,
-        action: 'assign',
-        entityType: 'note_assignment',
-        entityId: noteId,
+      await sendNoteAssignmentNotifications({
+        accountId: previous?.accountId || null,
+        noteId,
+        noteTitle,
+        actorUserId: actor.userId || null,
         actorName,
-        actorUid: actor.userId || null,
-        metadata: {
-          status: updates.status || previous?.status || 'todo',
-          title: noteTitle,
-          assignedToName,
-        },
-      });
-
-      await sendPushNotificationToUser(nextAssignedToUid, {
-        title: '📝 Tugas baru untukmu',
-        body: `${actorName} menugaskan "${noteTitle}"`,
-        data: {
-          type: 'note_assignment',
-          noteId,
-          action: 'assigned',
-        },
+        assignedToUid: nextAssignedToUid,
+        assignedToName,
+        status: updates.status || previous?.status || 'todo',
       });
     }
 

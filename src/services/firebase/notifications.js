@@ -181,12 +181,18 @@ export const getHouseholdMembers = async (householdId) => {
 };
 
 // ─── Send Push Notification to Household Members ────────────
-export const sendHouseholdNotification = async (householdId, senderUid, notification) => {
+export const sendHouseholdNotification = async (householdId, senderUid, notification, options = {}) => {
   try {
     const members = await getHouseholdMembers(householdId);
+    const excludedUserIds = new Set([
+      senderUid,
+      ...(Array.isArray(options.excludeUserIds) ? options.excludeUserIds : []),
+    ].filter(Boolean));
 
-    // Filter out the sender (don't send notification to themselves)
-    const recipients = members.filter(member => member.uid !== senderUid && member.expoPushToken);
+    // Filter out the sender and any explicitly excluded users.
+    const recipients = members.filter(
+      (member) => !excludedUserIds.has(member.uid) && member.expoPushToken
+    );
 
     if (recipients.length === 0) {
       return;

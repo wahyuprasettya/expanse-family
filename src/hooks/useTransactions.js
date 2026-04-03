@@ -73,11 +73,13 @@ export const useTransactions = () => {
     }
 
     if (data.type === 'expense') {
-      // Send notification to other household members
-      if (profile?.householdId && profile.householdId !== user.uid) {
+      // Send notification to other household members in the same shared account.
+      // For owners, householdId is often equal to user.uid, so comparing against
+      // user.uid incorrectly blocks notifications to their partner.
+      if (accountId) {
         try {
           await sendHouseholdNotification(
-            profile.householdId,
+            accountId,
             user.uid,
             {
               title: t('transactionNotification.householdAddedTitle', {
@@ -116,18 +118,34 @@ export const useTransactions = () => {
       if (budget && budget.amount > 0) {
         const newSpent = (budget.spent || 0) + data.amount;
         if (newSpent / budget.amount >= 0.8) {
+          const budgetWarningPayload = {
+            title: t('transactionNotification.budgetWarningTitle', { category: data.category }),
+            body: t('transactionNotification.budgetWarningBody', {
+              category: data.category,
+              percent: Math.round((newSpent / budget.amount) * 100),
+              amount: formatCurrency(budget.amount - newSpent, language),
+            }),
+            name: data.category,
+          };
+
           try {
-            await sendBudgetWarningNotification({
-              title: t('transactionNotification.budgetWarningTitle', { category: data.category }),
-              body: t('transactionNotification.budgetWarningBody', {
-                category: data.category,
-                percent: Math.round((newSpent / budget.amount) * 100),
-                amount: formatCurrency(budget.amount - newSpent, language),
-              }),
-              name: data.category,
-            });
+            await sendBudgetWarningNotification(budgetWarningPayload);
           } catch (sideEffectError) {
             console.warn('Budget warning notification failed:', sideEffectError);
+          }
+
+          try {
+            await sendHouseholdNotification(accountId, user.uid, {
+              title: budgetWarningPayload.title,
+              body: budgetWarningPayload.body,
+              data: {
+                type: 'budget_warning',
+                action: 'threshold',
+                category: data.category,
+              },
+            });
+          } catch (sideEffectError) {
+            console.warn('Household budget warning notification failed:', sideEffectError);
           }
         }
       }
@@ -148,11 +166,11 @@ export const useTransactions = () => {
         console.warn('Delete reminders failed:', sideEffectError);
       }
 
-      // Send notification to household members when transaction is deleted
-      if (transactionToDelete && profile?.householdId && profile.householdId !== user.uid) {
+      // Send notification to household members when transaction is deleted.
+      if (transactionToDelete && accountId) {
         try {
           await sendHouseholdNotification(
-            profile.householdId,
+            accountId,
             user.uid,
             {
               title: t('transactionNotification.householdDeletedTitle', {

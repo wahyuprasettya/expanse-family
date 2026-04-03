@@ -3,7 +3,7 @@
 // ============================================================
 import { configureStore } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { persistStore, persistReducer, FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER } from 'redux-persist';
+import { persistStore, persistReducer, createTransform, FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER } from 'redux-persist';
 import authReducer from './authSlice';
 import transactionReducer from './transactionSlice';
 import budgetReducer from './budgetSlice';
@@ -12,6 +12,13 @@ import assetReducer from './assetSlice';
 import reminderReducer from './reminderSlice';
 import appNotificationReducer from './appNotificationSlice';
 import uiReducer from './uiSlice';
+import { serializeFirestoreValue } from '@utils/firestore';
+
+const budgetItemsTransform = createTransform(
+  (inboundState) => (Array.isArray(inboundState) ? inboundState.map(serializeFirestoreValue) : []),
+  (outboundState) => (Array.isArray(outboundState) ? outboundState.map(serializeFirestoreValue) : []),
+  { whitelist: ['items'] }
+);
 
 // Persist configuration for transactions
 const transactionPersistConfig = {
@@ -25,6 +32,7 @@ const budgetPersistConfig = {
   key: 'budgets',
   storage: AsyncStorage,
   whitelist: ['items'],
+  transforms: [budgetItemsTransform],
 };
 
 const assetPersistConfig = {

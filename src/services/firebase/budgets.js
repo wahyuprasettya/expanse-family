@@ -14,6 +14,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './config';
+import { serializeFirestoreValue } from '@utils/firestore';
 
 const BUDGETS_COLLECTION = 'budgets';
 
@@ -72,7 +73,7 @@ export const subscribeToBudgets = (userId, year, month, callback) => {
   );
 
   return onSnapshot(q, (snapshot) => {
-    const budgets = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const budgets = snapshot.docs.map((d) => serializeFirestoreValue({ id: d.id, ...d.data() }));
     callback(budgets);
   });
 };

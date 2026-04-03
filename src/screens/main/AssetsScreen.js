@@ -14,7 +14,8 @@ import { useAppTheme } from '@hooks/useAppTheme';
 import { useTranslation } from '@hooks/useTranslation';
 import { addAssetLocal, removeAssetLocal, selectAssets, selectAssetsLoading } from '@store/assetSlice';
 import { addAsset, removeAsset } from '@services/firebase/assets';
-import { selectUser } from '@store/authSlice';
+import { sendHouseholdNotification } from '@services/firebase/notifications';
+import { selectProfile, selectUser } from '@store/authSlice';
 import LoadingState from '@components/common/LoadingState';
 
 const ASSET_TYPES = ['gold', 'cash', 'property', 'vehicle', 'crypto', 'other'];
@@ -26,9 +27,11 @@ export const AssetsScreen = ({ navigation }) => {
   const assets = useSelector(selectAssets);
   const assetsLoading = useSelector(selectAssetsLoading);
   const user = useSelector(selectUser);
+  const profile = useSelector(selectProfile);
   const { colors } = useAppTheme();
   const { t, language } = useTranslation();
   const styles = createStyles(colors);
+  const accountId = profile?.householdId || user?.uid;
   const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState({
     name: '',
@@ -96,6 +99,24 @@ export const AssetsScreen = ({ navigation }) => {
       const { error } = await addAsset(user.uid, assetPayload);
       if (error) {
         Alert.alert(t('common.error'), error);
+      } else {
+        try {
+          await sendHouseholdNotification(accountId, user.uid, {
+            title: t('assetNotification.householdAddedTitle', {
+              name: user.displayName || t('profile.fallbackUser'),
+            }),
+            body: t('assetNotification.householdAddedBody', {
+              asset: assetPayload.name,
+              amount: formatMoney(assetPayload.currentPrice * assetPayload.quantity, language),
+            }),
+            data: {
+              type: 'household_asset',
+              action: 'added',
+            },
+          });
+        } catch (sideEffectError) {
+          console.warn('Asset household notification failed:', sideEffectError);
+        }
       }
     }
     setForm({ name: '', type: 'gold', unit: 'gram', quantity: '', buyPrice: '', currentPrice: '', notes: '' });
@@ -149,6 +170,23 @@ export const AssetsScreen = ({ navigation }) => {
                       const { error } = await removeAsset(item.id);
                       if (error) {
                         Alert.alert(t('common.error'), error);
+                      } else {
+                        try {
+                          await sendHouseholdNotification(accountId, user.uid, {
+                            title: t('assetNotification.householdDeletedTitle', {
+                              name: user.displayName || t('profile.fallbackUser'),
+                            }),
+                            body: t('assetNotification.householdDeletedBody', {
+                              asset: item.name,
+                            }),
+                            data: {
+                              type: 'household_asset',
+                              action: 'deleted',
+                            },
+                          });
+                        } catch (sideEffectError) {
+                          console.warn('Asset delete household notification failed:', sideEffectError);
+                        }
                       }
                     }}
                   >
