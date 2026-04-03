@@ -8,9 +8,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:366154491402:android:8995795689d4905e45e1f3",
+        "mobilesdk_app_id": "1:366154491402:android:6045cb01551eaefc45e1f3",
         "android_client_info": {
-          "package_name": "com.wahyu.wapmoney"
+          "package_name": "com.wahyuadjie.appmoney"
         }
       },
       "oauth_client": [],
