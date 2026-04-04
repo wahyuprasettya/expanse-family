@@ -3,43 +3,51 @@
 // ============================================================
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { PieChart } from 'react-native-chart-kit';
+import { LineChart, PieChart } from 'react-native-chart-kit';
 import { useSelector } from 'react-redux';
 import { selectProfile, selectUser } from '@store/authSlice';
 import { selectAssets, selectAssetsLoading } from '@store/assetSlice';
 import { selectCategories, selectCategoriesLoading } from '@store/categorySlice';
+import { selectTransactions } from '@store/transactionSlice';
 import { getMonthlyReport } from '@services/firebase/transactions';
 import { formatCurrency, formatCurrencyCompact, formatDate } from '@utils/formatters';
+import { buildMonthlyExpenseData, getChangeStats, sumExpenses } from '@utils/calculations';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { exportToCSV, exportToPDF } from '@services/export';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
 import LoadingState from '@components/common/LoadingState';
 
-const { width } = Dimensions.get('window');
-const CHART_WIDTH = width - SPACING.lg * 2;
-
 export const ReportsScreen = () => {
   const { t, language } = useTranslation();
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
+  const { width: windowWidth } = useWindowDimensions();
   const user = useSelector(selectUser);
   const profile = useSelector(selectProfile);
   const assets = useSelector(selectAssets);
   const assetsLoading = useSelector(selectAssetsLoading);
   const categories = useSelector(selectCategories);
   const categoriesLoading = useSelector(selectCategoriesLoading);
+  const transactions = useSelector(selectTransactions);
   const accountId = profile?.householdId || user?.uid;
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
+  const isNarrowScreen = windowWidth < 360;
+  const isCompactScreen = windowWidth < 420;
+  const isTabletScreen = windowWidth >= 768;
+  const chartWidth = Math.max(
+    Math.min(windowWidth, 920) - (SPACING.lg * 2) - (SPACING.md * 2),
+    220
+  );
 
   // Asset calculations
   const assetRows = useMemo(() => assets.map((asset) => {
@@ -135,6 +143,180 @@ export const ReportsScreen = () => {
       legendFontSize: 12,
     })) || [];
 
+  const selectedDate = useMemo(
+    () => new Date(selectedYear, selectedMonth - 1, 1),
+    [selectedYear, selectedMonth]
+  );
+
+  const selectedMonthTransactions = useMemo(
+    () => transactions.filter((transaction) => {
+      const date = new Date(transaction.date);
+      return date.getFullYear() === selectedYear && date.getMonth() + 1 === selectedMonth;
+    }),
+    [selectedMonth, selectedYear, transactions]
+  );
+
+  const previousMonthTransactions = useMemo(() => {
+    const previousMonthDate = new Date(selectedYear, selectedMonth - 2, 1);
+    return transactions.filter((transaction) => {
+      const date = new Date(transaction.date);
+      return (
+        date.getFullYear() === previousMonthDate.getFullYear() &&
+        date.getMonth() === previousMonthDate.getMonth()
+      );
+    });
+  }, [selectedMonth, selectedYear, transactions]);
+
+  const expenseCategories = useMemo(
+    () => reportCategories
+      .filter((category) => category.type === 'expense' || category.type === 'debt')
+      .sort((first, second) => second.total - first.total),
+    [reportCategories]
+  );
+
+  const topExpenseCategory = expenseCategories[0] || null;
+  const categoryInsightMessages = useMemo(() => {
+    if (!topExpenseCategory || !report?.expense) return [];
+
+    const percentage = Math.round((topExpenseCategory.total / report.expense) * 100);
+    const messages = [
+      t('reports.categoryShare', {
+        percentage,
+        category: topExpenseCategory.displayName,
+      }),
+      t('reports.topCategory', {
+        category: topExpenseCategory.displayName,
+        amount: formatCurrency(topExpenseCategory.total, 'IDR', language),
+      }),
+    ];
+
+    if (percentage > 50) {
+      messages.push(t('reports.spendingConcentrated'));
+    }
+
+    return messages;
+  }, [language, report?.expense, t, topExpenseCategory]);
+
+  const selectedMonthExpenseTotal = useMemo(
+    () => sumExpenses(selectedMonthTransactions),
+    [selectedMonthTransactions]
+  );
+  const previousMonthExpenseTotal = useMemo(
+    () => sumExpenses(previousMonthTransactions),
+    [previousMonthTransactions]
+  );
+  const monthlyChange = useMemo(
+    () => getChangeStats(selectedMonthExpenseTotal, previousMonthExpenseTotal),
+    [previousMonthExpenseTotal, selectedMonthExpenseTotal]
+  );
+  const monthlySummaryCards = useMemo(() => {
+    if (!selectedMonthExpenseTotal && !previousMonthExpenseTotal) return [];
+
+    if (!monthlyChange.hasComparison) {
+      return [
+        {
+          title: t('reports.noPreviousComparison'),
+          subtitle: t('reports.currentSpendingAmount', {
+            amount: formatCurrency(selectedMonthExpenseTotal, 'IDR', language),
+          }),
+        },
+      ];
+    }
+
+    if (monthlyChange.direction === 'decreased') {
+      return [
+        {
+          title: t('reports.moreEfficientTitle'),
+          subtitle: t('reports.changeDownAmount', {
+            percentage: monthlyChange.percentage,
+            amount: formatCurrency(Math.abs(monthlyChange.difference), 'IDR', language),
+          }),
+        },
+      ];
+    }
+
+    if (monthlyChange.direction === 'increased') {
+      return [
+        {
+          title: t('reports.increasedTitle'),
+          subtitle: t('reports.changeUpAmount', {
+            percentage: monthlyChange.percentage,
+            amount: formatCurrency(monthlyChange.difference, 'IDR', language),
+          }),
+        },
+      ];
+    }
+
+    return [
+      {
+        title: t('reports.stableTitle'),
+        subtitle: t('reports.stableSubtitle'),
+      },
+    ];
+  }, [language, monthlyChange, previousMonthExpenseTotal, selectedMonthExpenseTotal, t]);
+
+  const trendMonths = useMemo(
+    () => buildMonthlyExpenseData(transactions, 6, selectedDate, language),
+    [language, selectedDate, transactions]
+  );
+  const trendMessages = useMemo(() => {
+    const messages = [];
+    const latestMonth = trendMonths[trendMonths.length - 1];
+    const previousMonth = trendMonths[trendMonths.length - 2];
+
+    if (latestMonth && previousMonth) {
+      const latestChange = getChangeStats(latestMonth.expense, previousMonth.expense);
+      if (latestChange.direction === 'increased') {
+        messages.push(t('reports.trendMonthIncreased', { month: latestMonth.fullLabel }));
+      }
+      if (latestChange.direction === 'decreased') {
+        messages.push(t('reports.trendMonthDecreased'));
+      }
+    }
+
+    const spikeCandidates = trendMonths
+      .map((month, index) => {
+        if (index === 0) return null;
+        const stats = getChangeStats(month.expense, trendMonths[index - 1].expense);
+        return { ...month, change: stats };
+      })
+      .filter(Boolean)
+      .filter((month) => month.change.hasComparison && month.change.direction === 'increased')
+      .sort((first, second) => second.change.percentage - first.change.percentage);
+
+    if (spikeCandidates[0] && spikeCandidates[0].change.percentage >= 25) {
+      messages.push(t('reports.significantSpike', { month: spikeCandidates[0].fullLabel }));
+    }
+
+    return messages;
+  }, [language, t, trendMonths]);
+
+  const chartData = useMemo(() => ({
+    labels: trendMonths.map((month) => month.shortLabel),
+    datasets: [
+      {
+        data: trendMonths.map((month) => month.expense || 0),
+        color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
+        strokeWidth: 3,
+      },
+    ],
+  }), [trendMonths]);
+
+  const largeTransactions = useMemo(
+    () => selectedMonthTransactions
+      .filter((transaction) => transaction.amount >= 1000000)
+      .sort((first, second) => second.amount - first.amount)
+      .map((transaction) => {
+        const category = categoryMap.get(transaction.categoryId);
+        return {
+          ...transaction,
+          displayCategory: getCategoryDisplayName(category) || transaction.category,
+          displayIcon: transaction.categoryIcon || category?.icon || '📦',
+        };
+      }),
+    [categoryMap, selectedMonthTransactions]
+  );
+
   const handleExport = async (format) => {
     if (!report) return;
 
@@ -166,10 +348,20 @@ export const ReportsScreen = () => {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={true}>
-        <LinearGradient colors={colors.gradients.header} style={styles.header}>
+      <ScrollView
+        showsVerticalScrollIndicator={true}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <LinearGradient
+          colors={colors.gradients.header}
+          style={[
+            styles.header,
+            isCompactScreen && styles.headerCompact,
+            isTabletScreen && styles.headerWide,
+          ]}
+        >
           <Text style={styles.title}>{t('reports.title')}</Text>
-          <View style={styles.exportBtns}>
+          <View style={[styles.exportBtns, isCompactScreen && styles.exportBtnsCompact]}>
             <TouchableOpacity style={styles.exportBtn} onPress={() => handleExport('csv')}>
               <Ionicons name="download-outline" size={16} color={colors.primary} />
               <Text style={styles.exportBtnText}>CSV</Text>
@@ -181,12 +373,18 @@ export const ReportsScreen = () => {
           </View>
         </LinearGradient>
 
-        <View style={styles.content}>
+        <View
+          style={[
+            styles.content,
+            isCompactScreen && styles.contentCompact,
+            isTabletScreen && styles.contentWide,
+          ]}
+        >
           {showInitialLoading ? (
             <LoadingState compact />
           ) : (
             <>
-          <View style={styles.periodPicker}>
+          <View style={[styles.periodPicker, isCompactScreen && styles.periodPickerCompact]}>
             <TouchableOpacity
               onPress={() => {
                 if (selectedMonth === 1) {
@@ -199,7 +397,7 @@ export const ReportsScreen = () => {
             >
               <Ionicons name="chevron-back" size={24} color={colors.primary} />
             </TouchableOpacity>
-            <Text style={styles.periodText}>
+            <Text style={[styles.periodText, isCompactScreen && styles.periodTextCompact]}>
               {formatDate(new Date(selectedYear, selectedMonth - 1, 1), 'MMM yyyy', language)}
             </Text>
             <TouchableOpacity
@@ -216,12 +414,26 @@ export const ReportsScreen = () => {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.summaryRow}>
-            <LinearGradient colors={colors.gradients.income} style={[styles.summaryCard, styles.summaryCardGradient]}>
+          <View style={[styles.summaryRow, isCompactScreen && styles.summaryRowCompact]}>
+            <LinearGradient
+              colors={colors.gradients.income}
+              style={[
+                styles.summaryCard,
+                styles.summaryCardGradient,
+                isCompactScreen && styles.summaryCardCompact,
+              ]}
+            >
               <Text style={styles.summaryLabel}>{t('reports.income')}</Text>
               <Text style={styles.summaryValue}>{formatCurrencyCompact(report?.income || 0, 'IDR', language)}</Text>
             </LinearGradient>
-            <LinearGradient colors={colors.gradients.expense} style={[styles.summaryCard, styles.summaryCardGradient]}>
+            <LinearGradient
+              colors={colors.gradients.expense}
+              style={[
+                styles.summaryCard,
+                styles.summaryCardGradient,
+                isCompactScreen && styles.summaryCardCompact,
+              ]}
+            >
               <Text style={styles.summaryLabel}>{t('reports.expenses')}</Text>
               <Text style={styles.summaryValue}>{formatCurrencyCompact(report?.expense || 0, 'IDR', language)}</Text>
             </LinearGradient>
@@ -237,14 +449,70 @@ export const ReportsScreen = () => {
             </Text>
           </View>
 
+          {monthlySummaryCards.length > 0 && (
+            <View style={styles.insightSection}>
+              <Text style={styles.chartTitle}>🗓️ {t('reports.monthlySummaryTitle')}</Text>
+              {monthlySummaryCards.map((item, index) => (
+                <View key={`${item.title}-${index}`} style={styles.insightCard}>
+                  <Text style={styles.insightTitle}>{item.title}</Text>
+                  {item.subtitle ? <Text style={styles.insightSubtitle}>{item.subtitle}</Text> : null}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {trendMonths.length > 0 && (
+            <View style={[styles.chartCard, isCompactScreen && styles.chartCardCompact]}>
+              <Text style={styles.chartTitle}>📈 {t('reports.sixMonthTrendTitle')}</Text>
+              <View style={styles.responsiveChartFrame}>
+                <LineChart
+                  data={chartData}
+                  width={chartWidth}
+                  height={isCompactScreen ? 200 : 220}
+                  chartConfig={{
+                    ...chartConfig,
+                    color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
+                    propsForLabels: {
+                      fontSize: isCompactScreen ? 10 : 12,
+                    },
+                  }}
+                  bezier
+                  withInnerLines={false}
+                  withOuterLines={false}
+                  fromZero
+                  style={styles.lineChart}
+                />
+              </View>
+              {trendMessages.map((message, index) => (
+                <View key={`${message}-${index}`} style={styles.insightCard}>
+                  <Text style={styles.insightTitle}>{message}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {categoryInsightMessages.length > 0 && (
+            <View style={styles.insightSection}>
+              <Text style={styles.chartTitle}>🧠 {t('reports.categoryInsightsTitle')}</Text>
+              {categoryInsightMessages.map((message, index) => (
+                <View key={`${message}-${index}`} style={styles.insightCard}>
+                  <Text style={styles.insightTitle}>{message}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           <View style={styles.sectionSeparator} />
 
           {assets.length > 0 && (
-            <LinearGradient colors={colors.gradients.header} style={styles.assetCard}>
-              <View style={styles.assetCardHeader}>
+            <LinearGradient
+              colors={colors.gradients.header}
+              style={[styles.assetCard, isCompactScreen && styles.assetCardCompact]}
+            >
+              <View style={[styles.assetCardHeader, isCompactScreen && styles.assetCardHeaderCompact]}>
                 <View>
                   <Text style={styles.assetEyebrow}>{t('assets.portfolioBreakdown')}</Text>
-                  <Text style={styles.assetTitle}>{t('assets.portfolioValue')}</Text>
+                  <Text style={[styles.assetTitle, isCompactScreen && styles.assetTitleCompact]}>{t('assets.portfolioValue')}</Text>
                 </View>
                 <View style={[styles.assetPerformanceBadge, { backgroundColor: `${totalAssetProfit >= 0 ? colors.income : colors.expense}20` }]}>
                   <Ionicons
@@ -258,21 +526,23 @@ export const ReportsScreen = () => {
                 </View>
               </View>
 
-              <Text style={styles.assetHeroValue}>{formatCurrency(totalAssetValue, 'IDR', language)}</Text>
+              <Text style={[styles.assetHeroValue, isCompactScreen && styles.assetHeroValueCompact]}>
+                {formatCurrency(totalAssetValue, 'IDR', language)}
+              </Text>
               <Text style={styles.assetHeroSubtext}>
                 {t('assets.totalGain')} {totalAssetProfit >= 0 ? '+' : ''}{formatCurrency(totalAssetProfit, 'IDR', language)}
               </Text>
 
-              <View style={styles.assetSummaryGrid}>
-                <View style={[styles.assetSummaryItem, styles.assetSummaryItemAccent]}>
+              <View style={[styles.assetSummaryGrid, isCompactScreen && styles.assetSummaryGridCompact]}>
+                <View style={[styles.assetSummaryItem, styles.assetSummaryItemAccent, isCompactScreen && styles.assetSummaryItemCompact]}>
                   <Text style={styles.assetSummaryLabel}>{t('assets.totalValue')}</Text>
                   <Text style={styles.assetSummaryValue}>{formatCurrency(totalAssetValue, 'IDR', language)}</Text>
                 </View>
-                <View style={styles.assetSummaryItem}>
+                <View style={[styles.assetSummaryItem, isCompactScreen && styles.assetSummaryItemCompact]}>
                   <Text style={styles.assetSummaryLabel}>{t('assets.totalCost')}</Text>
                   <Text style={styles.assetSummaryValue}>{formatCurrency(totalAssetCost, 'IDR', language)}</Text>
                 </View>
-                <View style={styles.assetSummaryItem}>
+                <View style={[styles.assetSummaryItem, isCompactScreen && styles.assetSummaryItemCompact]}>
                   <Text style={[styles.assetSummaryLabel, { color: totalAssetProfit >= 0 ? colors.income : colors.expense }]}>
                     {t('assets.totalGain')}
                   </Text>
@@ -280,7 +550,7 @@ export const ReportsScreen = () => {
                     {totalAssetProfit >= 0 ? '+' : ''}{formatCurrency(totalAssetProfit, 'IDR', language)}
                   </Text>
                 </View>
-                <View style={styles.assetSummaryItem}>
+                <View style={[styles.assetSummaryItem, isCompactScreen && styles.assetSummaryItemCompact]}>
                   <Text style={styles.assetSummaryLabel}>ROI</Text>
                   <Text style={[styles.assetSummaryValue, { color: totalAssetProfit >= 0 ? colors.income : colors.expense }]}>
                     {totalAssetCost > 0 ? `${(totalAssetProfit / totalAssetCost * 100).toFixed(1)}%` : '0%'}
@@ -291,11 +561,11 @@ export const ReportsScreen = () => {
           )}
 
           {assetPieData.length > 0 && (
-            <View style={styles.chartCard}>
+            <View style={[styles.chartCard, isCompactScreen && styles.chartCardCompact]}>
               <Text style={styles.chartTitle}>📊 {t('assets.portfolioBreakdown')}</Text>
               <PieChart
                 data={assetPieData}
-                width={CHART_WIDTH}
+                width={chartWidth}
                 height={200}
                 chartConfig={chartConfig}
                 accessor="value"
@@ -307,11 +577,11 @@ export const ReportsScreen = () => {
           )}
 
           {pieData.length > 0 && (
-            <View style={styles.chartCard}>
+            <View style={[styles.chartCard, isCompactScreen && styles.chartCardCompact]}>
               <Text style={styles.chartTitle}>💸 {t('reports.expenseBreakdown')}</Text>
               <PieChart
                 data={pieData}
-                width={CHART_WIDTH}
+                width={chartWidth}
                 height={200}
                 chartConfig={chartConfig}
                 accessor="amount"
@@ -332,13 +602,13 @@ export const ReportsScreen = () => {
                   const percentage = total > 0 ? (category.total / total) * 100 : 0;
 
                   return (
-                    <View key={index} style={styles.categoryRow}>
-                      <View style={styles.categoryRowLeft}>
+                    <View key={index} style={[styles.categoryRow, isCompactScreen && styles.categoryRowCompact]}>
+                      <View style={[styles.categoryRowLeft, isCompactScreen && styles.categoryRowLeftCompact]}>
                         <View style={[styles.categoryDot, { backgroundColor: colors.chart[index % colors.chart.length] }]} />
                         <Text style={styles.categoryRowName}>{category.displayName}</Text>
                         <Text style={styles.categoryRowCount}>({category.count}x)</Text>
                       </View>
-                      <View style={styles.categoryRowRight}>
+                      <View style={[styles.categoryRowRight, isCompactScreen && styles.categoryRowRightCompact]}>
                         <Text style={[
                           styles.categoryRowAmount,
                           { color: category.type === 'income' ? colors.income : colors.expense },
@@ -355,6 +625,39 @@ export const ReportsScreen = () => {
             </>
           )}
 
+          {largeTransactions.length > 0 && (
+            <>
+              <View style={styles.sectionSeparator} />
+              <View style={styles.largeTransactionSection}>
+                <Text style={styles.chartTitle}>💳 {t('reports.largeTransactionsTitle')}</Text>
+                <Text style={styles.largeTransactionLead}>
+                  {t('reports.largeTransactionsLead', { count: largeTransactions.length })}
+                </Text>
+                {largeTransactions.map((transaction) => (
+                  <View key={transaction.id} style={[styles.largeTransactionRow, isNarrowScreen && styles.largeTransactionRowCompact]}>
+                    <View style={[styles.largeTransactionLeft, isNarrowScreen && styles.largeTransactionLeftCompact]}>
+                      <Text style={styles.largeTransactionIcon}>{transaction.displayIcon}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.largeTransactionCategory}>{transaction.displayCategory}</Text>
+                        <Text style={styles.largeTransactionDate}>
+                          {formatDate(transaction.date, 'dd MMM yyyy', language)}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[styles.largeTransactionRight, isNarrowScreen && styles.largeTransactionRightCompact]}>
+                      <View style={styles.largeBadge}>
+                        <Text style={styles.largeBadgeText}>{t('reports.largeTransactionsBadge')}</Text>
+                      </View>
+                      <Text style={styles.largeTransactionAmount}>
+                        {formatCurrency(transaction.amount, 'IDR', language)}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
           {!report && !loading && (
             <View style={styles.empty}>
               <Text style={styles.emptyIcon}>📊</Text>
@@ -365,13 +668,13 @@ export const ReportsScreen = () => {
           )}
         </View>
       </ScrollView>
-      <View style={{ height: 30 }}></View>
     </SafeAreaView>
   );
 };
 
 const createStyles = (colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background, marginBottom: 20 },
+  scrollContent: { paddingBottom: 120 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -379,8 +682,22 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
-  title: { fontSize: FONT_SIZE.xl,fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
+  headerCompact: {
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+  },
+  headerWide: {
+    maxWidth: 920,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  title: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
   exportBtns: { flexDirection: 'row', gap: 8 },
+  exportBtnsCompact: {
+    width: '100%',
+    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
+  },
   exportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -394,6 +711,12 @@ const createStyles = (colors) => StyleSheet.create({
   },
   exportBtnText: { color: colors.primary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   content: { padding: SPACING.lg },
+  contentCompact: { padding: SPACING.md },
+  contentWide: {
+    maxWidth: 920,
+    width: '100%',
+    alignSelf: 'center',
+  },
   periodPicker: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -406,13 +729,26 @@ const createStyles = (colors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  periodPickerCompact: {
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+  },
   periodText: { fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
+  periodTextCompact: {
+    fontSize: FONT_SIZE.md,
+  },
   summaryRow: { flexDirection: 'row', gap: SPACING.md, marginBottom: SPACING.md },
+  summaryRowCompact: {
+    flexDirection: 'column',
+  },
   summaryCard: {
     flex: 1,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     ...SHADOWS.md,
+  },
+  summaryCardCompact: {
+    width: '100%',
   },
   summaryCardGradient: {},
   summaryLabel: { color: 'rgba(255,255,255,0.75)', fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
@@ -428,6 +764,29 @@ const createStyles = (colors) => StyleSheet.create({
   },
   balanceRowLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, marginBottom: 4 },
   balanceRowValue: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
+  insightSection: {
+    marginBottom: SPACING.lg,
+  },
+  insightCard: {
+    backgroundColor: colors.surface,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  insightTitle: {
+    color: colors.textPrimary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.medium,
+    lineHeight: 20,
+  },
+  insightSubtitle: {
+    color: colors.textMuted,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.regular,
+    marginTop: 6,
+  },
   sectionSeparator: {
     height: 1,
     backgroundColor: colors.border,
@@ -442,7 +801,20 @@ const createStyles = (colors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  chartCardCompact: {
+    paddingHorizontal: SPACING.sm,
+  },
   chartTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.semibold, marginBottom: SPACING.md },
+  responsiveChartFrame: {
+    alignItems: 'center',
+    overflow: 'hidden',
+    width: '100%',
+  },
+  lineChart: {
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.md,
+    alignSelf: 'center',
+  },
   assetCard: {
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.xl,
@@ -452,12 +824,19 @@ const createStyles = (colors) => StyleSheet.create({
     overflow: 'hidden',
     ...SHADOWS.md,
   },
+  assetCardCompact: {
+    padding: SPACING.md,
+  },
   assetCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: SPACING.sm,
     marginBottom: SPACING.md,
+  },
+  assetCardHeaderCompact: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
   },
   assetEyebrow: {
     color: colors.textMuted,
@@ -467,6 +846,9 @@ const createStyles = (colors) => StyleSheet.create({
     letterSpacing: 0.6,
   },
   assetTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, marginTop: 4 },
+  assetTitleCompact: {
+    fontSize: FONT_SIZE.lg,
+  },
   assetPerformanceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -482,6 +864,9 @@ const createStyles = (colors) => StyleSheet.create({
     fontFamily: FONT_FAMILY.extrabold,
     letterSpacing: -1,
   },
+  assetHeroValueCompact: {
+    fontSize: FONT_SIZE.xxl,
+  },
   assetHeroSubtext: {
     color: colors.textSecondary,
     fontSize: FONT_SIZE.sm,
@@ -490,6 +875,9 @@ const createStyles = (colors) => StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   assetSummaryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: SPACING.sm },
+  assetSummaryGridCompact: {
+    flexDirection: 'column',
+  },
   assetSummaryItem: {
     width: '48%',
     backgroundColor: colors.overlayLight,
@@ -498,6 +886,9 @@ const createStyles = (colors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: `${colors.border}CC`,
     marginBottom: 0,
+  },
+  assetSummaryItemCompact: {
+    width: '100%',
   },
   assetSummaryItemAccent: {
     borderColor: `${colors.primary}35`,
@@ -521,13 +912,95 @@ const createStyles = (colors) => StyleSheet.create({
     borderBottomColor: colors.border,
 
   },
+  categoryRowCompact: {
+    alignItems: 'flex-start',
+    gap: SPACING.xs,
+  },
   categoryRowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  categoryRowLeftCompact: {
+    width: '100%',
+  },
   categoryDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
   categoryRowName: { color: colors.textPrimary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, flex: 1 },
   categoryRowCount: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
   categoryRowRight: { alignItems: 'flex-end' },
+  categoryRowRightCompact: {
+    width: '100%',
+    alignItems: 'flex-start',
+    marginLeft: 18,
+  },
   categoryRowAmount: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, fontFamily: FONT_FAMILY.semibold },
   categoryRowPct: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 2 },
+  largeTransactionSection: {
+    backgroundColor: colors.surface,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  largeTransactionLead: {
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.regular,
+    marginBottom: SPACING.md,
+  },
+  largeTransactionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: SPACING.sm,
+  },
+  largeTransactionRowCompact: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  largeTransactionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    flex: 1,
+  },
+  largeTransactionLeftCompact: {
+    width: '100%',
+  },
+  largeTransactionIcon: { fontSize: 22 },
+  largeTransactionCategory: {
+    color: colors.textPrimary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.semibold,
+  },
+  largeTransactionDate: {
+    color: colors.textMuted,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.regular,
+    marginTop: 2,
+  },
+  largeTransactionRight: { alignItems: 'flex-end' },
+  largeTransactionRightCompact: {
+    width: '100%',
+    alignItems: 'flex-start',
+    marginLeft: 30,
+  },
+  largeBadge: {
+    backgroundColor: `${colors.warning}18`,
+    borderRadius: BORDER_RADIUS.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 6,
+  },
+  largeBadgeText: {
+    color: colors.warning,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.semibold,
+  },
+  largeTransactionAmount: {
+    color: colors.expense,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.bold,
+  },
   empty: { alignItems: 'center', paddingVertical: SPACING.xxl },
   emptyIcon: { fontSize: 48, marginBottom: SPACING.md },
   emptyText: { color: colors.textSecondary, fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.regular },

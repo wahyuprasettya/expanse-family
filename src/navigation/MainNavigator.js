@@ -20,6 +20,7 @@ import PinScreen from '@screens/auth/PinScreen';
 import HouseholdScreen from '@screens/main/HouseholdScreen';
 import NotificationsScreen from '@screens/main/NotificationsScreen';
 import NotesScreen from '@screens/main/NotesScreen';
+import InsightsScreen from '@screens/main/InsightsScreen';
 import ScanReceiptScreen from '@screens/receipt/ScanReceiptScreen';
 import ReceiptCameraScreen from '@screens/receipt/ReceiptCameraScreen';
 import { BORDER_RADIUS, FONT_FAMILY } from '@constants/theme';
@@ -103,6 +104,7 @@ const MainNavigator = () => {
       <Stack.Screen name="Categories" component={CategoriesScreen} />
       <Stack.Screen name="Household" component={HouseholdScreen} />
       <Stack.Screen name="Notes" component={NotesScreen} />
+      <Stack.Screen name="Insights" component={InsightsScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen
         name="Pin"

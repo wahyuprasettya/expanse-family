@@ -5,7 +5,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
-import { formatCurrency, formatDateSmart, formatTime } from '@utils/formatters';
+import { formatCurrency, formatCurrencyCompact, formatDateSmart, formatTime } from '@utils/formatters';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
 
@@ -15,17 +15,24 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
   const styles = createStyles(colors);
   const isIncome = transaction.type === 'income';
   const isDebt = transaction.type === 'debt';
+  const isLargeTransaction = transaction.amount >= 1000000;
   const amountColor = isIncome ? colors.income : colors.expense;
   const amountPrefix = isIncome ? '+' : '-';
+  const fullAmount = formatCurrency(transaction.amount, 'IDR', language);
+  const compactAmount = formatCurrencyCompact(transaction.amount, 'IDR', language);
+  const showCompactAmount = isLargeTransaction && compactAmount !== fullAmount;
+  const addedByText = language === 'en'
+    ? `By ${transaction.createdByName || ''}`
+    : `Oleh ${transaction.createdByName || ''}`;
   const debtSubtitle = transaction.debtMeta?.creditorName
     ? t('transactionCard.debtTo', { name: transaction.debtMeta.creditorName })
     : transaction.debtMeta?.dueDate
       ? t('transactionCard.debtDue', {
-          date: formatDateSmart(transaction.debtMeta.dueDate, language, {
-            today: t('common.today'),
-            yesterday: t('common.yesterday'),
-          }),
-        })
+        date: formatDateSmart(transaction.debtMeta.dueDate, language, {
+          today: t('common.today'),
+          yesterday: t('common.yesterday'),
+        }),
+      })
       : null;
 
   return (
@@ -42,19 +49,21 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
 
         {/* Info */}
         <View style={styles.info}>
-          <Text style={styles.category} numberOfLines={1}>{transaction.category}</Text>
-          <Text style={styles.description} numberOfLines={1}>
+          <Text style={styles.category} numberOfLines={1} ellipsizeMode="tail">
+            {transaction.category}
+          </Text>
+          <Text style={styles.description} numberOfLines={1} ellipsizeMode="tail">
             {transaction.description || debtSubtitle || formatDateSmart(transaction.date, language, {
               today: t('common.today'),
               yesterday: t('common.yesterday'),
             })}
           </Text>
           {transaction.createdByName ? (
-            <Text style={styles.memberLine} numberOfLines={1}>
-              Ditambahkan oleh {transaction.createdByName}
+            <Text style={styles.memberLine} numberOfLines={1} ellipsizeMode="tail">
+              {addedByText}
             </Text>
           ) : null}
-          <Text style={styles.time}>
+          <Text style={styles.time} numberOfLines={1} ellipsizeMode="tail">
             {formatDateSmart(transaction.date, language, {
               today: t('common.today'),
               yesterday: t('common.yesterday'),
@@ -64,13 +73,32 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
 
         {/* Amount */}
         <View style={styles.amountContainer}>
-          <Text style={[styles.amount, { color: amountColor }]}>
-            {amountPrefix}{formatCurrency(transaction.amount, 'IDR', language)}
+          <Text
+            style={[styles.amount, { color: amountColor }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+          >
+            {amountPrefix}{showCompactAmount ? compactAmount : fullAmount}
           </Text>
-          <View style={[styles.typeBadge, { backgroundColor: `${amountColor}20` }]}>
-            <Text style={[styles.typeText, { color: amountColor }]}>
-              {isIncome ? t('transactionCard.income') : isDebt ? t('transactionCard.debt') : t('transactionCard.expense')}
+          {showCompactAmount ? (
+            <Text style={styles.amountDetail} numberOfLines={1} ellipsizeMode="tail">
+              {amountPrefix}{fullAmount}
             </Text>
+          ) : null}
+          <View style={styles.badgeRow}>
+            {isLargeTransaction ? (
+              <View style={[styles.largeBadge, { backgroundColor: `${colors.warning}18` }]}>
+                <Text style={[styles.largeBadgeText, { color: colors.warning }]}>
+                  {language === 'en' ? 'Large' : 'Besar'}
+                </Text>
+              </View>
+            ) : null}
+            <View style={[styles.typeBadge, { backgroundColor: `${amountColor}20` }]}>
+              <Text style={[styles.typeText, { color: amountColor }]}>
+                {isIncome ? t('transactionCard.income') : isDebt ? t('transactionCard.debt') : t('transactionCard.expense')}
+              </Text>
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -100,7 +128,8 @@ const createStyles = (colors) => StyleSheet.create({
   pressableContent: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    overflow: 'hidden',
   },
   iconContainer: {
     width: 48,
@@ -111,20 +140,18 @@ const createStyles = (colors) => StyleSheet.create({
     marginRight: SPACING.md,
   },
   categoryIcon: { fontSize: 22 },
-  info: { flex: 1, marginRight: SPACING.sm, minWidth: 0 },
+  info: { flex: 1, flexShrink: 1, marginRight: SPACING.sm, minWidth: 0 },
   category: {
     color: colors.textPrimary,
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.semibold,
     fontFamily: FONT_FAMILY.semibold,
-    numberOfLines: 1,
   },
   description: {
     color: colors.textSecondary,
     fontSize: FONT_SIZE.sm,
     fontFamily: FONT_FAMILY.regular,
     marginTop: 2,
-    numberOfLines: 1,
   },
   memberLine: {
     color: colors.primary,
@@ -138,22 +165,52 @@ const createStyles = (colors) => StyleSheet.create({
     fontFamily: FONT_FAMILY.regular,
     marginTop: 2,
   },
-  amountContainer: { alignItems: 'flex-end', marginLeft: 'auto' },
+  amountContainer: {
+    alignItems: 'flex-end',
+    flexShrink: 1,
+    minWidth: 92,
+    maxWidth: '44%',
+    marginLeft: 'auto',
+  },
   amount: {
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
     fontFamily: FONT_FAMILY.bold,
+    textAlign: 'right',
+  },
+  amountDetail: {
+    color: colors.textMuted,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.medium,
+    marginTop: 2,
+    textAlign: 'right',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    gap: 6,
+    marginTop: 4,
   },
   typeBadge: {
     borderRadius: BORDER_RADIUS.full,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    marginTop: 4,
   },
   typeText: {
     fontSize: FONT_SIZE.xs,
     fontWeight: FONT_WEIGHT.medium,
     fontFamily: FONT_FAMILY.medium,
+  },
+  largeBadge: {
+    borderRadius: BORDER_RADIUS.full,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  largeBadgeText: {
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.semibold,
   },
   deleteBtn: {
     marginLeft: 8,

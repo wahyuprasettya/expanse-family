@@ -1,7 +1,7 @@
 // ============================================================
 // Budget Screen
 // ============================================================
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Alert, Modal, ScrollView
@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectUser } from '@store/authSlice';
 import { selectBudgets, selectBudgetsLoading, removeBudgetLocal } from '@store/budgetSlice';
+import { selectTransactions } from '@store/transactionSlice';
 import { addBudget, deleteBudget } from '@services/firebase/budgets';
 import { selectCategories } from '@store/categorySlice';
 import BudgetCard from '@components/budget/BudgetCard';
@@ -20,6 +21,7 @@ import Input from '@components/common/Input';
 import LoadingState from '@components/common/LoadingState';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { formatCurrency, formatDate, parseAmount } from '@utils/formatters';
+import { calcBudgetUsage, getBudgetStatus, isExpenseTransaction } from '@utils/calculations';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
 
@@ -31,6 +33,7 @@ export const BudgetScreen = ({ navigation }) => {
   const user = useSelector(selectUser);
   const budgets = useSelector(selectBudgets);
   const budgetsLoading = useSelector(selectBudgetsLoading);
+  const transactions = useSelector(selectTransactions);
   const categories = useSelector(selectCategories);
   const now = new Date();
   const [year] = useState(now.getFullYear());
@@ -85,21 +88,91 @@ export const BudgetScreen = ({ navigation }) => {
     ]);
   };
 
-  const totalBudget = budgets.reduce((sum, budget) => sum + budget.amount, 0);
-  const totalSpent = budgets.reduce((sum, budget) => sum + (budget.spent || 0), 0);
-
   const getCategoryDisplayName = (category) => {
     // If it's a default category, use translation, otherwise use the custom name
-    if (category.isDefault && category.id) {
+    if (category?.isDefault && category?.id) {
       const translatedName = t(`categories.names.${category.id}`);
       // If translation key doesn't exist, it returns the key itself, so check if it's different
       return translatedName !== `categories.names.${category.id}` ? translatedName : category.name;
     }
-    return category.name;
+    return category?.name || '';
   };
 
+  const budgetList = useMemo(() => {
+    const categoryMap = new Map(categories.map((category) => [category.id, category]));
+    const monthlySpending = transactions
+      .filter((transaction) => {
+        const date = new Date(transaction.date);
+        return (
+          isExpenseTransaction(transaction) &&
+          date.getFullYear() === year &&
+          date.getMonth() + 1 === month
+        );
+      })
+      .reduce((accumulator, transaction) => {
+        accumulator[transaction.categoryId] = (accumulator[transaction.categoryId] || 0) + transaction.amount;
+        return accumulator;
+      }, {});
 
-  if (budgetsLoading && budgets.length === 0) {
+    const getStatusLabel = (status) => {
+      if (language === 'en') {
+        if (status === 'exceeded') return 'Exceeded';
+        if (status === 'critical') return 'Almost gone';
+        if (status === 'warning') return 'Warning';
+        return 'Safe';
+      }
+
+      if (status === 'exceeded') return 'Terlampaui';
+      if (status === 'critical') return 'Hampir habis';
+      if (status === 'warning') return 'Waspada';
+      return 'Aman';
+    };
+
+    return budgets
+      .map((budget) => {
+        const category = categoryMap.get(budget.categoryId);
+        const spent = monthlySpending[budget.categoryId] || 0;
+        const usagePercentage = calcBudgetUsage(spent, budget.amount);
+        const status = getBudgetStatus(usagePercentage);
+        const categoryName = getCategoryDisplayName(category || {
+          id: budget.categoryId,
+          name: budget.categoryName,
+          isDefault: false,
+        });
+
+        return {
+          ...budget,
+          categoryName,
+          categoryIcon: category?.icon || budget.categoryIcon,
+          spent,
+          usagePercentage,
+          status,
+          statusLabel: getStatusLabel(status),
+          message: status === 'exceeded'
+            ? (language === 'en'
+                ? `${categoryName} budget has been exceeded`
+                : `Budget ${categoryName} sudah terlampaui`)
+            : status === 'critical'
+              ? (language === 'en'
+                  ? `${categoryName} budget is almost gone`
+                  : `Budget ${categoryName} hampir habis`)
+              : status === 'warning'
+                ? (language === 'en'
+                    ? `${categoryName} budget is already used ${usagePercentage}%`
+                    : `Budget ${categoryName} sudah terpakai ${usagePercentage}%`)
+                : (language === 'en'
+                    ? `${categoryName} budget is still safe`
+                    : `Budget ${categoryName} kamu masih aman`),
+        };
+      })
+      .sort((first, second) => second.usagePercentage - first.usagePercentage);
+  }, [budgets, categories, transactions, year, month, language, t]);
+
+  const totalBudget = budgetList.reduce((sum, budget) => sum + budget.amount, 0);
+  const totalSpent = budgetList.reduce((sum, budget) => sum + (budget.spent || 0), 0);
+
+
+  if (budgetsLoading && budgetList.length === 0) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <LinearGradient colors={colors.gradients.header} style={styles.header}>
@@ -124,7 +197,7 @@ export const BudgetScreen = ({ navigation }) => {
         </TouchableOpacity>
       </LinearGradient>
 
-      {budgets.length > 0 && (
+      {budgetList.length > 0 && (
         <View style={styles.overallCard}>
           <View style={styles.overallInfo}>
             <Text style={styles.overallLabel}>{t('budget.totalBudgetUsed')}</Text>
@@ -151,7 +224,7 @@ export const BudgetScreen = ({ navigation }) => {
         </View>
       )}
 
-      {budgets.length === 0 ? (
+      {budgetList.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🎯</Text>
           <Text style={styles.emptyText}>{t('budget.noBudgets')}</Text>
@@ -160,7 +233,7 @@ export const BudgetScreen = ({ navigation }) => {
         </View>
       ) : (
         <FlatList
-          data={budgets}
+          data={budgetList}
           keyExtractor={(budget) => budget.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (

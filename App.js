@@ -4,7 +4,7 @@
 import 'react-native-url-polyfill/auto';
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
-import { StatusBar, LogBox, Text, TextInput } from 'react-native';
+import { StatusBar, LogBox, Text, TextInput, View } from 'react-native';
 import { Provider, useDispatch } from 'react-redux';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -60,9 +60,22 @@ const AppContent = () => {
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={colors.background}
         translucent={false}
+        animated
       />
       {fontsLoaded ? <AppNavigator /> : null}
     </>
+  );
+};
+
+const ThemedAppShell = () => {
+  const { colors } = useAppTheme();
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <AppContent />
+      <Toast />
+      <AppAlertHost />
+    </View>
   );
 };
 
@@ -72,9 +85,7 @@ export default function App() {
       <Provider store={store}>
         <PersistGate loading={null} persistor={persistor}>
           <SafeAreaProvider>
-            <AppContent />
-            <Toast />
-            <AppAlertHost />
+            <ThemedAppShell />
           </SafeAreaProvider>
         </PersistGate>
       </Provider>
