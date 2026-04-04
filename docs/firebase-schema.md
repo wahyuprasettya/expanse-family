@@ -179,6 +179,21 @@ User asset portfolio entries such as gold, cash, property, and vehicles.
 
 ---
 
+### 7. `appConfig/ocr`
+
+Global application config for OCR service credentials.
+
+```json
+{
+  "ocrSpaceApiKey": "string",
+  "updatedAt":      "Timestamp | null"
+}
+```
+
+This document is intended to be updated manually from **Firebase Console** when the OCR.Space key changes, so mobile clients do not store a long-lived local copy.
+
+---
+
 ## Relationships Diagram
 
 ```
@@ -237,6 +252,10 @@ service cloud.firestore {
     match /categories/{docId} {
       allow read, delete: if isOwner(resource.data.userId);
       allow create, update: if isOwner(request.resource.data.userId);
+    }
+
+    match /appConfig/{docId} {
+      allow read: if request.auth != null;
     }
   }
 }

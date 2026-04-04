@@ -3,25 +3,47 @@
 // ============================================================
 import * as ImagePicker from 'expo-image-picker';
 import * as SecureStore from 'expo-secure-store';
+import { getOCRConfig } from '@services/firebase/appConfig';
 
-const OCR_SPACE_API_KEY = 'ocrSpaceApiKey';
 const OCR_SPACE_ENDPOINT = 'https://api.ocr.space/parse/image';
+const LEGACY_OCR_SPACE_API_KEY = 'ocrSpaceApiKey';
+let cachedOCRApiKey = null;
+let hasLoadedOCRApiKey = false;
+let hasClearedLegacyOCRApiKey = false;
 
-export const saveOCRApiKey = async (apiKey) => {
-  const trimmedApiKey = String(apiKey || '').trim();
-
-  if (!trimmedApiKey) {
-    await SecureStore.deleteItemAsync(OCR_SPACE_API_KEY);
-    return '';
+const clearLegacyOCRApiKey = async () => {
+  if (hasClearedLegacyOCRApiKey) {
+    return;
   }
 
-  await SecureStore.setItemAsync(OCR_SPACE_API_KEY, trimmedApiKey);
-  return trimmedApiKey;
+  try {
+    await SecureStore.deleteItemAsync(LEGACY_OCR_SPACE_API_KEY);
+  } catch (_error) {
+    // Ignore cleanup failures. The app no longer relies on local OCR keys.
+  } finally {
+    hasClearedLegacyOCRApiKey = true;
+  }
 };
 
-export const getOCRApiKey = async () => {
-  const apiKey = await SecureStore.getItemAsync(OCR_SPACE_API_KEY);
-  return String(apiKey || '').trim();
+export const getOCRApiKey = async (options = {}) => {
+  const forceRefresh = options.forceRefresh === true;
+  await clearLegacyOCRApiKey();
+
+  if (!forceRefresh && hasLoadedOCRApiKey) {
+    return cachedOCRApiKey || '';
+  }
+
+  const { config, error } = await getOCRConfig();
+
+  if (error) {
+    throw new Error(error);
+  }
+
+  const apiKey = String(config?.ocrSpaceApiKey || '').trim();
+  cachedOCRApiKey = apiKey;
+  hasLoadedOCRApiKey = true;
+
+  return apiKey;
 };
 
 // ─── Pick or Capture Receipt Image ───────────────────────────
@@ -60,7 +82,7 @@ export const pickReceiptImage = async (useCamera = false) => {
 // ─── OCR.Space Scan ──────────────────────────────────────────
 export const extractTextFromReceiptImage = async ({ base64, apiKey, language = 'eng' }) => {
   try {
-    const normalizedApiKey = String(apiKey || '').trim() || await getOCRApiKey();
+    const normalizedApiKey = String(apiKey || '').trim() || await getOCRApiKey({ forceRefresh: true });
 
     if (!normalizedApiKey) {
       return {
@@ -79,8 +101,6 @@ export const extractTextFromReceiptImage = async ({ base64, apiKey, language = '
         error: 'Gambar struk tidak tersedia untuk diproses.',
       };
     }
-
-    await saveOCRApiKey(normalizedApiKey);
 
     const formData = new FormData();
     formData.append('apikey', normalizedApiKey);

@@ -51,7 +51,7 @@ import { useAppTheme } from "@hooks/useAppTheme";
 import { useBiometric } from "@hooks/useBiometric";
 import { updateProfile } from "firebase/auth";
 import { auth } from "@services/firebase/config";
-import { getOCRApiKey, saveOCRApiKey } from "@services/ocr";
+import { getOCRApiKey } from "@services/ocr";
 
 const SettingRow = ({
   colors,
@@ -105,9 +105,8 @@ export const ProfileScreen = ({ navigation }) => {
   const [pushDebugLoading, setPushDebugLoading] = useState(false);
   const [pushDebugInfo, setPushDebugInfo] = useState(null);
   const [showDebugTools, setShowDebugTools] = useState(false);
-  const [showOCRApiKeyModal, setShowOCRApiKeyModal] = useState(false);
   const [ocrApiKey, setOcrApiKey] = useState("");
-  const [ocrApiKeySaving, setOcrApiKeySaving] = useState(false);
+  const [ocrApiKeyLoading, setOcrApiKeyLoading] = useState(false);
   const lastVersionTapRef = useRef(0);
   const notAuthenticatedMessage = language === "en" ? "Please sign in again." : "Silakan login kembali.";
   const affirmativeLabel = language === "en" ? "Yes" : "Ya";
@@ -133,9 +132,13 @@ export const ProfileScreen = ({ navigation }) => {
   useEffect(() => {
     let isMounted = true;
 
-    const loadStoredOCRApiKey = async () => {
+    const loadOCRApiKeyFromFirebase = async () => {
+      if (isMounted) {
+        setOcrApiKeyLoading(true);
+      }
+
       try {
-        const storedApiKey = await getOCRApiKey();
+        const storedApiKey = await getOCRApiKey({ forceRefresh: true });
         if (isMounted) {
           setOcrApiKey(storedApiKey);
         }
@@ -143,10 +146,14 @@ export const ProfileScreen = ({ navigation }) => {
         if (isMounted) {
           setOcrApiKey("");
         }
+      } finally {
+        if (isMounted) {
+          setOcrApiKeyLoading(false);
+        }
       }
     };
 
-    void loadStoredOCRApiKey();
+    void loadOCRApiKeyFromFirebase();
 
     return () => {
       isMounted = false;
@@ -308,33 +315,21 @@ export const ProfileScreen = ({ navigation }) => {
     lastVersionTapRef.current = now;
   };
 
-  const handleOpenOCRApiKeyModal = async () => {
+  const handleRefreshOCRApiKey = async () => {
+    setOcrApiKeyLoading(true);
     try {
-      const storedApiKey = await getOCRApiKey();
+      const storedApiKey = await getOCRApiKey({ forceRefresh: true });
       setOcrApiKey(storedApiKey);
-    } catch (_error) {
-      setOcrApiKey("");
-    }
-
-    setShowOCRApiKeyModal(true);
-  };
-
-  const handleSaveOCRApiKey = async () => {
-    const nextApiKey = ocrApiKey.trim();
-
-    setOcrApiKeySaving(true);
-    try {
-      await saveOCRApiKey(nextApiKey);
-      setOcrApiKey(nextApiKey);
-      setShowOCRApiKeyModal(false);
       Alert.alert(
-        t("common.success"),
-        nextApiKey ? t("profile.ocrApiKeySavedSuccess") : t("profile.ocrApiKeyClearedSuccess")
+        t("profile.ocrApiKey"),
+        storedApiKey
+          ? t("profile.ocrApiKeyHint")
+          : t("receipt.apiKeyRequiredProfile")
       );
     } catch (error) {
       Alert.alert(t("common.error"), error.message || t("profile.ocrApiKeySaveFailed"));
     } finally {
-      setOcrApiKeySaving(false);
+      setOcrApiKeyLoading(false);
     }
   };
 
@@ -631,7 +626,12 @@ export const ProfileScreen = ({ navigation }) => {
                   label={t("profile.ocrApiKey")}
                   subtitle={formatApiKeyPreview(ocrApiKey)}
                   color={colors.income}
-                  onPress={handleOpenOCRApiKeyModal}
+                  onPress={handleRefreshOCRApiKey}
+                  rightElement={
+                    ocrApiKeyLoading ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : undefined
+                  }
                 />
               </>
             ) : null}
@@ -830,60 +830,6 @@ export const ProfileScreen = ({ navigation }) => {
         </View>
       </Modal>
 
-      <Modal visible={showOCRApiKeyModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t("profile.ocrApiKey")}</Text>
-              <TouchableOpacity onPress={() => setShowOCRApiKeyModal(false)}>
-                <Ionicons name="close" size={24} color={colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.editForm}>
-              <Text style={styles.inputLabel}>{t("profile.ocrApiKeyLabel")}</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="key-outline"
-                  size={20}
-                  color={colors.textMuted}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  value={ocrApiKey}
-                  onChangeText={setOcrApiKey}
-                  placeholder={t("profile.ocrApiKeyPlaceholder")}
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-              <Text style={styles.inputHelpText}>{t("profile.ocrApiKeyHint")}</Text>
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.cancelBtn]}
-                onPress={() => setShowOCRApiKeyModal(false)}
-              >
-                <Text style={styles.cancelBtnText}>{t("common.cancel")}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, styles.saveBtn]}
-                onPress={handleSaveOCRApiKey}
-                disabled={ocrApiKeySaving}
-              >
-                {ocrApiKeySaving ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.saveBtnText}>{t("common.save")}</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
