@@ -15,6 +15,7 @@ import Button from '@components/common/Button';
 import { useTranslation } from '@hooks/useTranslation';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
+import { getFirebaseAuthErrorMessage } from '@utils/firebaseError';
 
 const authBackground = require('../../../assets/bg.jpeg');
 
@@ -51,7 +52,7 @@ export const RegisterScreen = ({ navigation }) => {
     });
     setLoading(false);
     if (error) {
-      Alert.alert(t('auth.registrationFailed'), error);
+      Alert.alert(t('auth.registrationFailed'), getFirebaseAuthErrorMessage(error, t));
     } else {
       dispatch(setUser(user));
     }

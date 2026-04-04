@@ -45,7 +45,7 @@ const emptyForm = {
   assignedToName: '',
 };
 
-export const NotesScreen = ({ navigation }) => {
+export const NotesScreen = ({ navigation, route }) => {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { colors } = useAppTheme();
   const { t } = useTranslation();
@@ -108,6 +108,21 @@ export const NotesScreen = ({ navigation }) => {
       isMounted = false;
     };
   }, [accountId]);
+
+  useEffect(() => {
+    const focusNoteId = route?.params?.focusNoteId;
+    if (!focusNoteId || !notes.length) {
+      return;
+    }
+
+    const noteToFocus = notes.find((note) => note.id === focusNoteId);
+    if (!noteToFocus) {
+      return;
+    }
+
+    openManageModal(noteToFocus);
+    navigation.setParams({ focusNoteId: undefined });
+  }, [navigation, notes, route?.params?.focusNoteId]);
 
   const groupedNotes = useMemo(
     () => BOARD_COLUMNS.reduce((acc, status) => {

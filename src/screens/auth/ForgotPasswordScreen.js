@@ -13,6 +13,7 @@ import Button from '@components/common/Button';
 import { useTranslation } from '@hooks/useTranslation';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
+import { getFirebaseAuthErrorMessage } from '@utils/firebaseError';
 
 export const ForgotPasswordScreen = ({ navigation }) => {
   const { t } = useTranslation();
@@ -43,7 +44,7 @@ export const ForgotPasswordScreen = ({ navigation }) => {
     try {
       const { error } = await resetPassword(email.trim());
       if (error) {
-        setErrors({ email: t('auth.resetPasswordFailed') });
+        setErrors({ email: getFirebaseAuthErrorMessage(error, t, 'auth.errors.resetFailed') });
       } else {
         setSuccess(true);
         Alert.alert(
@@ -53,7 +54,7 @@ export const ForgotPasswordScreen = ({ navigation }) => {
         );
       }
     } catch (error) {
-      setErrors({ email: t('auth.resetPasswordFailed') });
+      setErrors({ email: getFirebaseAuthErrorMessage(error, t, 'auth.errors.resetFailed') });
     } finally {
       setLoading(false);
     }

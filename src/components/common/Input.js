@@ -28,6 +28,8 @@ export const Input = ({
   inputStyle,
   prefix,
   formatAsRupiah = false,
+  onFocus,
+  onBlur,
   ...props
 }) => {
   const { colors } = useAppTheme();
@@ -41,6 +43,16 @@ export const Input = ({
     }
 
     onChangeText(text);
+  };
+
+  const handleFocus = (event) => {
+    setIsFocused(true);
+    onFocus?.(event);
+  };
+
+  const handleBlur = (event) => {
+    setIsFocused(false);
+    onBlur?.(event);
   };
 
   return (
@@ -71,8 +83,8 @@ export const Input = ({
           multiline={multiline}
           numberOfLines={numberOfLines}
           editable={!disabled}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           style={[
             styles.input,
             icon && styles.inputWithIcon,

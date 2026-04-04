@@ -11,18 +11,57 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { useTransactions } from '@hooks/useTransactions';
 import { selectCategories } from '@store/categorySlice';
+import { selectTransactions, selectTransactionsLoading } from '@store/transactionSlice';
 import { formatCurrency, formatDate, formatTime } from '@utils/formatters';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { useAppTheme } from '@hooks/useAppTheme';
 import { useTranslation } from '@hooks/useTranslation';
+import LoadingState from '@components/common/LoadingState';
 
 export const TransactionDetailScreen = ({ navigation, route }) => {
-  const { transaction } = route.params;
   const { deleteTransaction } = useTransactions();
+  const transactions = useSelector(selectTransactions);
+  const transactionsLoading = useSelector(selectTransactionsLoading);
   const categories = useSelector(selectCategories);
   const { colors } = useAppTheme();
   const { t, language } = useTranslation();
   const styles = createStyles(colors);
+  const transactionId = route.params?.transactionId || route.params?.transaction?.id;
+  const transaction = transactions.find((item) => item.id === transactionId) || route.params?.transaction || null;
+
+  if (!transaction && transactionsLoading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.headerPlain}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, styles.headerTitlePlain]}>{t('transaction.title')}</Text>
+          <View style={styles.deleteBtn} />
+        </View>
+        <LoadingState />
+      </SafeAreaView>
+    );
+  }
+
+  if (!transaction) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.headerPlain}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, styles.headerTitlePlain]}>{t('transaction.title')}</Text>
+          <View style={styles.deleteBtn} />
+        </View>
+        <View style={styles.emptyState}>
+          <Ionicons name="receipt-outline" size={36} color={colors.textMuted} />
+          <Text style={styles.emptyTitle}>{t('receipt.notFound')}</Text>
+          <Text style={styles.emptyText}>{t('transaction.notFoundMessage')}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const isIncome = transaction.type === 'income';
   const isDebt = transaction.type === 'debt';
@@ -137,8 +176,17 @@ const createStyles = (colors) => StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, 
   },
+  headerPlain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    backgroundColor: colors.background,
+  },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold, color: '#FFF' },
+  headerTitlePlain: { color: colors.textPrimary },
   deleteBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   amountSection: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg, marginTop: 20 },
   amountCard: {
@@ -173,6 +221,25 @@ const createStyles = (colors) => StyleSheet.create({
     padding: SPACING.md, borderWidth: 1,
   },
   relatedText: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, lineHeight: 22 },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.xl,
+    gap: SPACING.sm,
+  },
+  emptyTitle: {
+    color: colors.textPrimary,
+    fontSize: FONT_SIZE.lg,
+    fontFamily: FONT_FAMILY.bold,
+  },
+  emptyText: {
+    color: colors.textMuted,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.regular,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 });
 
 export default TransactionDetailScreen;

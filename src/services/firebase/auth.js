@@ -48,7 +48,7 @@ export const registerUser = async ({ email, password, displayName }) => {
 
     return { user, error: null };
   } catch (error) {
-    return { user: null, error: error.message };
+    return { user: null, error: error.code || error.message || 'unknown' };
   }
 };
 
@@ -58,7 +58,7 @@ export const loginUser = async ({ email, password }) => {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     return { user: userCredential.user, error: null };
   } catch (error) {
-    return { user: null, error: error.message };
+    return { user: null, error: error.code || error.message || 'unknown' };
   }
 };
 
@@ -69,7 +69,7 @@ export const logoutUser = async () => {
     await SecureStore.deleteItemAsync('userPin');
     return { error: null };
   } catch (error) {
-    return { error: error.message };
+    return { error: error.code || error.message || 'unknown' };
   }
 };
 

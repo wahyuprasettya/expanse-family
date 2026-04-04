@@ -265,7 +265,7 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
   },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
+  title: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold },
   addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   typeToggle: {
     flexDirection: 'row', margin: SPACING.lg,
@@ -300,7 +300,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderTopRightRadius: BORDER_RADIUS.xl, padding: SPACING.lg, maxHeight: '90%',
   },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.lg },
-  modalTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
+  modalTitle: { fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold },
   fieldLabel: { fontSize: FONT_SIZE.sm, fontWeight: '500', fontFamily: FONT_FAMILY.medium, marginBottom: SPACING.sm },
   modalTypeToggle: { flexDirection: 'row', gap: 8, marginBottom: SPACING.md },
   modalTypeBtn: {

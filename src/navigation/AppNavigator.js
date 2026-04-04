@@ -1,10 +1,11 @@
 // ============================================================
 // Root App Navigator
 // ============================================================
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { View, ActivityIndicator } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { selectIsAuthenticated, selectIsPinVerified, selectProfile } from '@store/authSlice';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
@@ -18,9 +19,11 @@ import { useBudgetSync } from '@hooks/useBudgetSync';
 import { useAssetSync } from '@hooks/useAssetSync';
 import { useAppNotificationSync } from '@hooks/useAppNotificationSync';
 import { useLegacyCleanup } from '@hooks/useLegacyCleanup';
+import { flushPendingNotificationNavigation, navigateToNotificationTarget, navigationRef } from './notificationNavigation';
 
 export const AppNavigator = () => {
   const { isLoading } = useAuth();
+  const handledNotificationIdsRef = useRef(new Set());
   const now = new Date();
   useTransactionSync();
   useCategorySync();
@@ -47,6 +50,42 @@ export const AppNavigator = () => {
     },
   };
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const handleNotificationResponse = async (response) => {
+      if (!response || !isMounted) return;
+
+      const requestId = response?.notification?.request?.identifier;
+      if (requestId && handledNotificationIdsRef.current.has(requestId)) {
+        return;
+      }
+
+      navigateToNotificationTarget(response?.notification?.request?.content?.data || {});
+
+      if (requestId) {
+        handledNotificationIdsRef.current.add(requestId);
+      }
+
+      if (typeof Notifications.clearLastNotificationResponseAsync === 'function') {
+        await Notifications.clearLastNotificationResponseAsync();
+      }
+    };
+
+    Notifications.getLastNotificationResponseAsync()
+      .then(handleNotificationResponse)
+      .catch(() => {});
+
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      handleNotificationResponse(response);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.remove();
+    };
+  }, []);
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }}>
@@ -71,7 +110,11 @@ export const AppNavigator = () => {
 
   // Main app
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navigationTheme}
+      onReady={flushPendingNotificationNavigation}
+    >
       <MainNavigator />
     </NavigationContainer>
   );

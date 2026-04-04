@@ -152,7 +152,6 @@ const createStyles = (colors) => StyleSheet.create({
   headerTitle: {
     color: colors.textPrimary,
     fontSize: FONT_SIZE.lg,
-    fontWeight: FONT_WEIGHT.bold,
     fontFamily: FONT_FAMILY.bold,
   },
   content: {

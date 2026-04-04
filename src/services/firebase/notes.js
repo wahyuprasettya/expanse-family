@@ -25,10 +25,16 @@ const DEFAULT_ASSIGNEE_NAME = 'anggota tim';
 const buildAssignmentMessage = (actorName, assignedToName, noteTitle) =>
   `${actorName} menugaskan ${assignedToName || DEFAULT_ASSIGNEE_NAME} terkait "${noteTitle}"`;
 
+const buildNoteNotificationBody = (message, noteDescription = '') => {
+  const description = noteDescription?.trim();
+  return description ? `${message}\n${description}` : message;
+};
+
 const sendNoteAssignmentNotifications = async ({
   accountId,
   noteId,
   noteTitle,
+  noteDescription = '',
   actorUserId = null,
   actorName = DEFAULT_MEMBER_NAME,
   assignedToUid,
@@ -40,22 +46,23 @@ const sendNoteAssignmentNotifications = async ({
   }
 
   const assignmentMessage = buildAssignmentMessage(actorName, assignedToName, noteTitle);
+  const notificationBody = buildNoteNotificationBody(assignmentMessage, noteDescription);
 
   await logAppNotification({
     userId: assignedToUid,
     title: 'Tugas baru untukmu',
-    body: assignmentMessage,
+    body: notificationBody,
     action: 'assign',
     entityType: 'note_assignment',
     entityId: noteId,
     actorName,
     actorUid: actorUserId,
-    metadata: { status, title: noteTitle, assignedToName },
+    metadata: { status, title: noteTitle, assignedToName, description: noteDescription || '' },
   });
 
   await sendPushNotificationToUser(assignedToUid, {
     title: '📝 Tugas baru untukmu',
-    body: assignmentMessage,
+    body: notificationBody,
     data: {
       type: 'note_assignment',
       noteId,
@@ -69,7 +76,7 @@ const sendNoteAssignmentNotifications = async ({
       actorUserId,
       {
         title: '📝 Update catatan tim',
-        body: assignmentMessage,
+        body: notificationBody,
         data: {
           type: 'note_assignment',
           noteId,
@@ -132,18 +139,19 @@ export const addNote = async ({
     await logAppNotification({
       userId,
       title: 'Catatan baru ditambahkan',
-      body: `${title} masuk ke papan catatan`,
+      body: buildNoteNotificationBody(`${title} masuk ke papan catatan`, description),
       action: 'insert',
       entityType: 'note',
       entityId: docRef.id,
       actorName: authorName || 'Member',
-      metadata: { status, assignedToUid, assignedToName: assignedToName || '' },
+      metadata: { status, assignedToUid, assignedToName: assignedToName || '', description: description || '' },
     });
 
     await sendNoteAssignmentNotifications({
       accountId,
       noteId: docRef.id,
       noteTitle: title,
+      noteDescription: description || '',
       actorUserId: userId,
       actorName: authorName || DEFAULT_MEMBER_NAME,
       assignedToUid,
@@ -173,6 +181,7 @@ export const updateNote = async (noteId, updates, actor = {}) => {
 
     if (assignmentChanged && nextAssignedToUid) {
       const noteTitle = updates.title || previous?.title || 'Catatan';
+      const noteDescription = updates.description ?? previous?.description ?? '';
       const actorName = actor.authorName || previous?.authorName || DEFAULT_MEMBER_NAME;
       const assignedToName = updates.assignedToName || previous?.assignedToName || '';
 
@@ -180,6 +189,7 @@ export const updateNote = async (noteId, updates, actor = {}) => {
         accountId: previous?.accountId || null,
         noteId,
         noteTitle,
+        noteDescription,
         actorUserId: actor.userId || null,
         actorName,
         assignedToUid: nextAssignedToUid,

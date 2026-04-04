@@ -67,11 +67,24 @@ export const AddTransactionScreen = ({ navigation, route }) => {
     const prefill = route?.params?.prefill;
     if (!prefill) return;
 
-    if (prefill.type) setType(prefill.type);
+    if (prefill.type) {
+      setType(prefill.type);
+      setSelectedCategory((currentCategory) => {
+        if (prefill.type === 'debt') {
+          return categories.find((category) => category.id === 'debt') || currentCategory;
+        }
+
+        if (!currentCategory) return null;
+        return currentCategory.type === prefill.type || currentCategory.type === 'both'
+          ? currentCategory
+          : null;
+      });
+    }
     if (prefill.amount) setAmount(formatRupiahInput(prefill.amount));
     if (prefill.description) setDescription(prefill.description);
     if (prefill.date) setDate(new Date(prefill.date));
-  }, [route?.params?.prefill]);
+    setErrors({});
+  }, [categories, route?.params?.prefill]);
 
   const validate = () => {
     const newErrors = {};
@@ -98,6 +111,10 @@ export const AddTransactionScreen = ({ navigation, route }) => {
   const openDatePicker = (target) => {
     setDatePickerTarget(target);
     setShowDatePicker(true);
+  };
+
+  const handleScanReceipt = () => {
+    navigation.navigate('ScanReceipt');
   };
 
   const handleSubmit = async () => {
@@ -176,6 +193,17 @@ export const AddTransactionScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             ))}
           </View>
+
+          <TouchableOpacity style={styles.receiptScannerCard} onPress={handleScanReceipt}>
+            <View style={styles.receiptScannerIcon}>
+              <Ionicons name="receipt-outline" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.receiptScannerInfo}>
+              <Text style={styles.receiptScannerTitle}>{t('profile.scanReceipt')}</Text>
+              <Text style={styles.receiptScannerSubtitle}>{t('addTransaction.scanReceiptSubtitle')}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
 
           {/* Amount */}
           <View style={styles.amountContainer}>
@@ -356,6 +384,39 @@ const createStyles = (colors) => StyleSheet.create({
     padding: 4,
     marginBottom: SPACING.lg,
     borderWidth: 1, borderColor: colors.border,
+  },
+  receiptScannerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...SHADOWS.sm,
+  },
+  receiptScannerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${colors.primary}18`,
+    marginRight: SPACING.md,
+  },
+  receiptScannerInfo: { flex: 1 },
+  receiptScannerTitle: {
+    color: colors.textPrimary,
+    fontSize: FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.semibold,
+    fontFamily: FONT_FAMILY.semibold,
+  },
+  receiptScannerSubtitle: {
+    color: colors.textMuted,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.regular,
+    marginTop: 2,
   },
   typeBtn: {
     flex: 1,

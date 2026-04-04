@@ -20,6 +20,8 @@ import PinScreen from '@screens/auth/PinScreen';
 import HouseholdScreen from '@screens/main/HouseholdScreen';
 import NotificationsScreen from '@screens/main/NotificationsScreen';
 import NotesScreen from '@screens/main/NotesScreen';
+import ScanReceiptScreen from '@screens/receipt/ScanReceiptScreen';
+import ReceiptCameraScreen from '@screens/receipt/ReceiptCameraScreen';
 import { BORDER_RADIUS, FONT_FAMILY } from '@constants/theme';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
@@ -85,6 +87,16 @@ const MainNavigator = () => {
         name="AddTransaction"
         component={AddTransactionScreen}
         options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="ScanReceipt"
+        component={ScanReceiptScreen}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="ReceiptCamera"
+        component={ReceiptCameraScreen}
+        options={{ presentation: 'fullScreenModal' }}
       />
       <Stack.Screen name="TransactionDetail" component={TransactionDetailScreen} />
       <Stack.Screen name="Reminders" component={RemindersScreen} />

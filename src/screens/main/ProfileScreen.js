@@ -1,7 +1,7 @@
 // ============================================================
 // Profile Screen (Settings, PIN, Categories, Export)
 // ============================================================
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import { useSelector, useDispatch } from "react-redux";
 import { selectUser, selectProfile, setProfile, setUser, logout as clearAuthState } from "@store/authSlice";
@@ -50,6 +51,7 @@ import { useAppTheme } from "@hooks/useAppTheme";
 import { useBiometric } from "@hooks/useBiometric";
 import { updateProfile } from "firebase/auth";
 import { auth } from "@services/firebase/config";
+import { getOCRApiKey, saveOCRApiKey } from "@services/ocr";
 
 const SettingRow = ({
   colors,
@@ -102,12 +104,54 @@ export const ProfileScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [pushDebugLoading, setPushDebugLoading] = useState(false);
   const [pushDebugInfo, setPushDebugInfo] = useState(null);
+  const [showDebugTools, setShowDebugTools] = useState(false);
+  const [showOCRApiKeyModal, setShowOCRApiKeyModal] = useState(false);
+  const [ocrApiKey, setOcrApiKey] = useState("");
+  const [ocrApiKeySaving, setOcrApiKeySaving] = useState(false);
+  const lastVersionTapRef = useRef(0);
   const notAuthenticatedMessage = language === "en" ? "Please sign in again." : "Silakan login kembali.";
   const affirmativeLabel = language === "en" ? "Yes" : "Ya";
   const negativeLabel = language === "en" ? "No" : "Tidak";
+  const appVersion = Constants.expoConfig?.version || "1.0.0";
+  const displayName = user?.displayName || t("profile.fallbackUser");
+  const avatarInitials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || user?.email?.[0]?.toUpperCase() || "U";
 
   const formatTokenPreview = (token) =>
     token ? `${token.slice(0, 18)}...${token.slice(-8)}` : "-";
+
+  const formatApiKeyPreview = (value) => {
+    if (!value) return t("profile.ocrApiKeyNotSet");
+    if (value.length <= 10) return value;
+    return `${value.slice(0, 6)}...${value.slice(-4)}`;
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadStoredOCRApiKey = async () => {
+      try {
+        const storedApiKey = await getOCRApiKey();
+        if (isMounted) {
+          setOcrApiKey(storedApiKey);
+        }
+      } catch (_error) {
+        if (isMounted) {
+          setOcrApiKey("");
+        }
+      }
+    };
+
+    void loadStoredOCRApiKey();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const getPushDebugSubtitle = () => {
     if (pushDebugLoading) return t("common.loading");
@@ -251,6 +295,46 @@ export const ProfileScreen = ({ navigation }) => {
       Alert.alert(t("common.error"), error.message || t("profile.pushDebugError"));
     } finally {
       setPushDebugLoading(false);
+    }
+  };
+
+  const handleVersionPress = () => {
+    const now = Date.now();
+
+    if (now - lastVersionTapRef.current <= 400) {
+      setShowDebugTools((prev) => !prev);
+    }
+
+    lastVersionTapRef.current = now;
+  };
+
+  const handleOpenOCRApiKeyModal = async () => {
+    try {
+      const storedApiKey = await getOCRApiKey();
+      setOcrApiKey(storedApiKey);
+    } catch (_error) {
+      setOcrApiKey("");
+    }
+
+    setShowOCRApiKeyModal(true);
+  };
+
+  const handleSaveOCRApiKey = async () => {
+    const nextApiKey = ocrApiKey.trim();
+
+    setOcrApiKeySaving(true);
+    try {
+      await saveOCRApiKey(nextApiKey);
+      setOcrApiKey(nextApiKey);
+      setShowOCRApiKeyModal(false);
+      Alert.alert(
+        t("common.success"),
+        nextApiKey ? t("profile.ocrApiKeySavedSuccess") : t("profile.ocrApiKeyClearedSuccess")
+      );
+    } catch (error) {
+      Alert.alert(t("common.error"), error.message || t("profile.ocrApiKeySaveFailed"));
+    } finally {
+      setOcrApiKeySaving(false);
     }
   };
 
@@ -430,14 +514,6 @@ export const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  const initials =
-    user?.displayName
-      ?.split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2) || "?";
-
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView
@@ -446,12 +522,16 @@ export const ProfileScreen = ({ navigation }) => {
       >
         {/* Header */}
         <LinearGradient colors={colors.gradients.primary} style={styles.header}>
-
           <View style={styles.avatarLarge}>
-            <Text style={styles.avatarLetters}>{initials}</Text>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarInitials}>{avatarInitials}</Text>
+              <View style={styles.avatarOnlineBadge}>
+                <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+              </View>
+            </View>
           </View>
           <Text style={styles.name}>
-            {user?.displayName || t("profile.fallbackUser")}
+            {displayName}
           </Text>
           <Text style={styles.email}>{user?.email}</Text>
           <View style={styles.memberBadge}>
@@ -519,29 +599,42 @@ export const ProfileScreen = ({ navigation }) => {
                 />
               }
             />
-            <SettingRow
-              colors={colors}
-              styles={styles}
-              icon="bug-outline"
-              label={t("profile.pushDebug")}
-              subtitle={getPushDebugSubtitle()}
-              color={colors.info}
-              onPress={handleCheckPushDebug}
-              rightElement={
-                pushDebugLoading ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : undefined
-              }
-            />
-            <SettingRow
-              colors={colors}
-              styles={styles}
-              icon="paper-plane-outline"
-              label={t("profile.testNotification")}
-              subtitle={t("profile.testNotificationSubtitle")}
-              color={colors.secondary}
-              onPress={handleSendTestNotification}
-            />
+            {showDebugTools ? (
+              <>
+                <SettingRow
+                  colors={colors}
+                  styles={styles}
+                  icon="bug-outline"
+                  label={t("profile.pushDebug")}
+                  subtitle={getPushDebugSubtitle()}
+                  color={colors.info}
+                  onPress={handleCheckPushDebug}
+                  rightElement={
+                    pushDebugLoading ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : undefined
+                  }
+                />
+                <SettingRow
+                  colors={colors}
+                  styles={styles}
+                  icon="paper-plane-outline"
+                  label={t("profile.testNotification")}
+                  subtitle={t("profile.testNotificationSubtitle")}
+                  color={colors.secondary}
+                  onPress={handleSendTestNotification}
+                />
+                <SettingRow
+                  colors={colors}
+                  styles={styles}
+                  icon="key-outline"
+                  label={t("profile.ocrApiKey")}
+                  subtitle={formatApiKeyPreview(ocrApiKey)}
+                  color={colors.income}
+                  onPress={handleOpenOCRApiKeyModal}
+                />
+              </>
+            ) : null}
             <SettingRow
               colors={colors}
               styles={styles}
@@ -619,6 +712,15 @@ export const ProfileScreen = ({ navigation }) => {
             <SettingRow
               colors={colors}
               styles={styles}
+              icon="receipt-outline"
+              label={t("profile.scanReceipt")}
+              subtitle={t("profile.receiptScanner")}
+              color={colors.income}
+              onPress={() => navigation.navigate("ScanReceipt")}
+            />
+            <SettingRow
+              colors={colors}
+              styles={styles}
               icon="cloud-upload-outline"
               label={t("profile.backupSync")}
               subtitle={t("profile.lastSynced", { time: t("common.justNow") })}
@@ -650,7 +752,9 @@ export const ProfileScreen = ({ navigation }) => {
             <Text style={styles.logoutText}>{t("profile.signOut")}</Text>
           </TouchableOpacity>
 
-          <Text style={styles.version}>WP App v1.0.0</Text>
+          <TouchableOpacity activeOpacity={0.8} onPress={handleVersionPress}>
+            <Text style={styles.version}>WP App v{appVersion}</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -725,6 +829,61 @@ export const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={showOCRApiKeyModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t("profile.ocrApiKey")}</Text>
+              <TouchableOpacity onPress={() => setShowOCRApiKeyModal(false)}>
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.editForm}>
+              <Text style={styles.inputLabel}>{t("profile.ocrApiKeyLabel")}</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="key-outline"
+                  size={20}
+                  color={colors.textMuted}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  value={ocrApiKey}
+                  onChangeText={setOcrApiKey}
+                  placeholder={t("profile.ocrApiKeyPlaceholder")}
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+              <Text style={styles.inputHelpText}>{t("profile.ocrApiKeyHint")}</Text>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.cancelBtn]}
+                onPress={() => setShowOCRApiKeyModal(false)}
+              >
+                <Text style={styles.cancelBtnText}>{t("common.cancel")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.saveBtn]}
+                onPress={handleSaveOCRApiKey}
+                disabled={ocrApiKeySaving}
+              >
+                {ocrApiKeySaving ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.saveBtnText}>{t("common.save")}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -743,21 +902,46 @@ const createStyles = (colors) =>
 
     },
     avatarLarge: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: "rgba(255,255,255,0.3)",
+      width: 156,
+      height: 156,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: SPACING.lg,
+    },
+    avatarCircle: {
+      width: 108,
+      height: 108,
+      borderRadius: 54,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.32)",
+      shadowColor: "#0F172A",
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.14,
+      shadowRadius: 18,
+      elevation: 8,
+    },
+    avatarInitials: {
+      color: colors.primary,
+      fontSize: 32,
+      fontWeight: FONT_WEIGHT.extrabold,
+      fontFamily: FONT_FAMILY.extrabold,
+      letterSpacing: 0.5,
+    },
+    avatarOnlineBadge: {
+      position: "absolute",
+      right: 4,
+      bottom: 6,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: "#22C55E",
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 3,
-      borderColor: "rgba(255,255,255,0.5)",
-      marginBottom: SPACING.md,
-    },
-    avatarLetters: {
-      color: "#FFF",
-      fontSize: FONT_SIZE.xxl,
-      // fontWeight: FONT_WEIGHT.bold,
-      fontFamily: FONT_FAMILY.bold,
+      borderColor: colors.primary,
     },
     name: {
       color: "#FFF",
@@ -942,6 +1126,12 @@ const createStyles = (colors) =>
       color: colors.textMuted,
       fontSize: FONT_SIZE.xs,
       fontFamily: FONT_FAMILY.regular,
+    },
+    inputHelpText: {
+      color: colors.textMuted,
+      fontSize: FONT_SIZE.xs,
+      fontFamily: FONT_FAMILY.regular,
+      lineHeight: 18,
     },
     modalActions: {
       flexDirection: "row",

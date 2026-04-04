@@ -266,7 +266,7 @@ const createStyles = (colors) => StyleSheet.create({
     overflow: 'hidden',
   },
   overallFill: { height: '100%', borderRadius: BORDER_RADIUS.full },
-  list: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl },
+  list: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl + 40 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyIcon: { fontSize: 60, marginBottom: SPACING.md },
   emptyText: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
