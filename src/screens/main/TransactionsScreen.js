@@ -3,9 +3,9 @@
 // ============================================================
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ScrollView
+  View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ScrollView, useWindowDimensions
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSelector } from 'react-redux';
@@ -20,9 +20,12 @@ import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
 
 export const TransactionsScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const isCompact = width < 380;
   const { t, language } = useTranslation();
   const { colors } = useAppTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, { isCompact, bottomInset: insets.bottom });
   const transactions = useSelector(selectTransactions);
   const transactionsLoading = useSelector(selectTransactionsLoading);
   const categories = useSelector(selectCategories);
@@ -103,9 +106,9 @@ export const TransactionsScreen = ({ navigation }) => {
 
   if (transactionsLoading && transactions.length === 0) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <LinearGradient colors={colors.gradients.header} style={styles.header}>
-          <Text style={styles.title}>{t('transactions.title')}</Text>
+          <Text style={styles.title} numberOfLines={1}>{t('transactions.title')}</Text>
           <TouchableOpacity onPress={() => navigation.navigate('AddTransaction')} style={styles.addBtn}>
             <Ionicons name="add" size={24} color={colors.primary} />
           </TouchableOpacity>
@@ -116,9 +119,9 @@ export const TransactionsScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <LinearGradient colors={colors.gradients.header} style={styles.header}>
-        <Text style={styles.title}>{t('transactions.title')}</Text>
+        <Text style={styles.title} numberOfLines={1}>{t('transactions.title')}</Text>
         <TouchableOpacity onPress={() => navigation.navigate('AddTransaction')} style={styles.addBtn}>
           <Ionicons name="add" size={24} color={colors.primary} />
         </TouchableOpacity>
@@ -207,6 +210,7 @@ export const TransactionsScreen = ({ navigation }) => {
           keyExtractor={(item) => formatDate(item.date, 'yyyy-MM-dd', language)}
           renderItem={renderGroup}
           contentContainerStyle={styles.list}
+          style={styles.listView}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -214,7 +218,7 @@ export const TransactionsScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isCompact, bottomInset }) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
@@ -223,7 +227,7 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
-  title: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
+  title: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary, flex: 1, marginRight: SPACING.sm },
   addBtn: {
     width: 40,
     height: 40,
@@ -279,14 +283,16 @@ const createStyles = (colors) => StyleSheet.create({
   categoryChipText: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
   categoryChipTextActive: { color: '#FFFFFF' },
   stats: {
-    flexDirection: 'row',
+    flexDirection: isCompact ? 'column' : 'row',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
+    gap: isCompact ? SPACING.xs : SPACING.sm,
   },
-  statsText: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
+  statsText: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, flexShrink: 1 },
   clearFilter: { color: colors.primary, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
-  list: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl },
+  listView: { flex: 1 },
+  list: { paddingHorizontal: SPACING.lg, paddingBottom: Math.max(bottomInset + SPACING.xxl, 88) },
   group: { marginBottom: SPACING.md },
   groupDate: {
     color: colors.textMuted,
@@ -294,6 +300,7 @@ const createStyles = (colors) => StyleSheet.create({
     fontWeight: FONT_WEIGHT.medium,
     fontFamily: FONT_FAMILY.medium,
     marginBottom: SPACING.sm,
+    flexShrink: 1,
   },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
   emptyIcon: { fontSize: 48, marginBottom: SPACING.md },

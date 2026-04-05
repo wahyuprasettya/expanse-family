@@ -13,8 +13,9 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
@@ -79,7 +80,7 @@ const SettingRow = ({
     </View>
     <View style={styles.settingInfo}>
       <Text style={styles.settingLabel}>{label}</Text>
-      {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
+      {subtitle ? <Text style={styles.settingSubtitle}>{subtitle}</Text> : null}
     </View>
     {rightElement ||
       (onPress && (
@@ -89,10 +90,14 @@ const SettingRow = ({
 );
 
 export const ProfileScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const isCompact = width < 390;
+  const isNarrow = width < 350;
   const dispatch = useDispatch();
   const { t, language, availableLanguages } = useTranslation();
   const { colors, themeMode } = useAppTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, { isCompact, isNarrow, bottomInset: insets.bottom });
   const user = useSelector(selectUser);
   const profile = useSelector(selectProfile);
   const activeLanguage = useSelector(selectLanguage);
@@ -552,7 +557,7 @@ export const ProfileScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <ScrollView
         showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
@@ -567,10 +572,10 @@ export const ProfileScreen = ({ navigation }) => {
               </View>
             </View>
           </View>
-          <Text style={styles.name}>
+          <Text style={styles.name} numberOfLines={2}>
             {displayName}
           </Text>
-          <Text style={styles.email}>{user?.email}</Text>
+          <Text style={styles.email} numberOfLines={2}>{user?.email}</Text>
           <View style={styles.memberBadge}>
             <Ionicons name="shield-checkmark" size={14} color="#FFF" />
             <Text style={styles.memberText}>{t("profile.member")}</Text>
@@ -745,6 +750,15 @@ export const ProfileScreen = ({ navigation }) => {
             <SettingRow
               colors={colors}
               styles={styles}
+              icon="wallet-outline"
+              label={t("profile.wallets")}
+              subtitle={t("profile.manageWallets")}
+              color={colors.primary}
+              onPress={() => navigation.navigate("Wallets")}
+            />
+            <SettingRow
+              colors={colors}
+              styles={styles}
               icon="diamond-outline"
               label={t("profile.assets")}
               subtitle={t("profile.manageAssets")}
@@ -889,11 +903,11 @@ export const ProfileScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) =>
+const createStyles = (colors, { isCompact, isNarrow, bottomInset }) =>
   StyleSheet.create({
     safe: { flex: 1, backgroundColor: colors.background },
     scrollContent: {
-      paddingBottom: SPACING.xxl,
+      paddingBottom: Math.max(bottomInset + SPACING.xl, SPACING.xxl),
     },
     header: {
       alignItems: "center",
@@ -946,15 +960,16 @@ const createStyles = (colors) =>
     },
     name: {
       color: "#FFF",
-      fontSize: FONT_SIZE.lg,
-      // fontWeight: FONT_WEIGHT.bold,
+      fontSize: isNarrow ? FONT_SIZE.md : FONT_SIZE.lg,
       fontFamily: FONT_FAMILY.bold,
+      textAlign: "center",
     },
     email: {
       color: "rgba(255,255,255,0.75)",
       fontSize: FONT_SIZE.sm,
       fontFamily: FONT_FAMILY.regular,
       marginTop: 4,
+      textAlign: "center",
     },
     memberBadge: {
       flexDirection: "row",
@@ -973,7 +988,7 @@ const createStyles = (colors) =>
       fontWeight: FONT_WEIGHT.medium,
       fontFamily: FONT_FAMILY.medium,
     },
-    content: { padding: SPACING.lg },
+    content: { padding: isCompact ? SPACING.md : SPACING.lg },
     sectionTitle: {
       color: colors.textMuted,
       fontSize: FONT_SIZE.xs,
@@ -998,6 +1013,7 @@ const createStyles = (colors) =>
       padding: SPACING.md,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
+      gap: SPACING.sm,
     },
     settingIcon: {
       width: 38,
@@ -1005,9 +1021,9 @@ const createStyles = (colors) =>
       borderRadius: BORDER_RADIUS.md,
       alignItems: "center",
       justifyContent: "center",
-      marginRight: SPACING.md,
+      marginRight: isCompact ? SPACING.sm : SPACING.md,
     },
-    settingInfo: { flex: 1 },
+    settingInfo: { flex: 1, minWidth: 0 },
     settingLabel: {
       color: colors.textPrimary,
       fontSize: FONT_SIZE.md,
@@ -1019,6 +1035,7 @@ const createStyles = (colors) =>
       fontSize: FONT_SIZE.xs,
       fontFamily: FONT_FAMILY.regular,
       marginTop: 2,
+      lineHeight: 18,
     },
     aboutCard: {
       backgroundColor: colors.surface,
@@ -1079,7 +1096,8 @@ const createStyles = (colors) =>
       borderTopLeftRadius: BORDER_RADIUS.xl,
       borderTopRightRadius: BORDER_RADIUS.xl,
       padding: SPACING.lg,
-      maxHeight: "80%",
+      maxHeight: "88%",
+      paddingBottom: Math.max(bottomInset, SPACING.md) + SPACING.lg,
     },
     modalHeader: {
       flexDirection: "row",
@@ -1092,6 +1110,8 @@ const createStyles = (colors) =>
       fontWeight: FONT_WEIGHT.bold,
       fontFamily: FONT_FAMILY.bold,
       color: colors.textPrimary,
+      flex: 1,
+      paddingRight: SPACING.md,
     },
     editForm: { marginBottom: SPACING.lg },
     inputLabel: {
@@ -1135,7 +1155,7 @@ const createStyles = (colors) =>
       lineHeight: 18,
     },
     modalActions: {
-      flexDirection: "row",
+      flexDirection: isNarrow ? "column" : "row",
       gap: SPACING.md,
     },
     modalBtn: {

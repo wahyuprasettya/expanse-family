@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { LineChart, PieChart } from 'react-native-chart-kit';
@@ -26,8 +26,8 @@ import LoadingState from '@components/common/LoadingState';
 export const ReportsScreen = () => {
   const { t, language } = useTranslation();
   const { colors } = useAppTheme();
-  const styles = createStyles(colors);
   const { width: windowWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const user = useSelector(selectUser);
   const profile = useSelector(selectProfile);
   const assets = useSelector(selectAssets);
@@ -44,6 +44,11 @@ export const ReportsScreen = () => {
   const isNarrowScreen = windowWidth < 360;
   const isCompactScreen = windowWidth < 420;
   const isTabletScreen = windowWidth >= 768;
+  const styles = createStyles(colors, {
+    isCompactScreen,
+    isNarrowScreen,
+    bottomInset: insets.bottom,
+  });
   const chartWidth = Math.max(
     Math.min(windowWidth, 920) - (SPACING.lg * 2) - (SPACING.md * 2),
     220
@@ -347,7 +352,7 @@ export const ReportsScreen = () => {
   const showInitialLoading = (loading || assetsLoading || categoriesLoading) && !report;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScrollView
         showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.scrollContent}
@@ -360,7 +365,7 @@ export const ReportsScreen = () => {
             isTabletScreen && styles.headerWide,
           ]}
         >
-          <Text style={styles.title}>{t('reports.title')}</Text>
+          <Text style={styles.title} numberOfLines={1}>{t('reports.title')}</Text>
           <View style={[styles.exportBtns, isCompactScreen && styles.exportBtnsCompact]}>
             <TouchableOpacity style={styles.exportBtn} onPress={() => handleExport('csv')}>
               <Ionicons name="download-outline" size={16} color={colors.primary} />
@@ -672,9 +677,9 @@ export const ReportsScreen = () => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background, marginBottom: 20 },
-  scrollContent: { paddingBottom: 120 },
+const createStyles = (colors, { isCompactScreen, isNarrowScreen, bottomInset }) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
+  scrollContent: { paddingBottom: Math.max(bottomInset + 120, 140) },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -691,8 +696,8 @@ const createStyles = (colors) => StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  title: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
-  exportBtns: { flexDirection: 'row', gap: 8 },
+  title: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary, flex: 1, marginRight: SPACING.sm },
+  exportBtns: { flexDirection: 'row', gap: 8, flexShrink: 0 },
   exportBtnsCompact: {
     width: '100%',
     justifyContent: 'flex-start',
@@ -733,7 +738,7 @@ const createStyles = (colors) => StyleSheet.create({
     gap: SPACING.md,
     paddingHorizontal: SPACING.sm,
   },
-  periodText: { fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
+  periodText: { fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary, flexShrink: 1 },
   periodTextCompact: {
     fontSize: FONT_SIZE.md,
   },
@@ -752,7 +757,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   summaryCardGradient: {},
   summaryLabel: { color: 'rgba(255,255,255,0.75)', fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
-  summaryValue: { color: '#FFFFFF', fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, marginTop: 4 },
+  summaryValue: { color: '#FFFFFF', fontSize: isNarrowScreen ? FONT_SIZE.lg : FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, marginTop: 4 },
   balanceCardFull: {
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.lg,
@@ -763,7 +768,7 @@ const createStyles = (colors) => StyleSheet.create({
     ...SHADOWS.sm,
   },
   balanceRowLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, marginBottom: 4 },
-  balanceRowValue: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
+  balanceRowValue: { fontSize: isNarrowScreen ? FONT_SIZE.lg : FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
   insightSection: {
     marginBottom: SPACING.lg,
   },
@@ -916,7 +921,7 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'flex-start',
     gap: SPACING.xs,
   },
-  categoryRowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  categoryRowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 },
   categoryRowLeftCompact: {
     width: '100%',
   },
@@ -962,6 +967,7 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.sm,
     flex: 1,
+    minWidth: 0,
   },
   largeTransactionLeftCompact: {
     width: '100%',

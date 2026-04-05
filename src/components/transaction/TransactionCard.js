@@ -2,7 +2,7 @@
 // Transaction Card Component
 // ============================================================
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { formatCurrency, formatCurrencyCompact, formatDateSmart, formatTime } from '@utils/formatters';
@@ -10,9 +10,11 @@ import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
 
 export const TransactionCard = ({ transaction, onPress, onDelete }) => {
+  const { width } = useWindowDimensions();
+  const isCompact = width < 370;
   const { t, language } = useTranslation();
   const { colors } = useAppTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, { isCompact });
   const isIncome = transaction.type === 'income';
   const isDebt = transaction.type === 'debt';
   const isLargeTransaction = transaction.amount >= 1000000;
@@ -58,6 +60,11 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
               yesterday: t('common.yesterday'),
             })}
           </Text>
+          {transaction.walletName ? (
+            <Text style={styles.walletLine} numberOfLines={1} ellipsizeMode="tail">
+              {'👛 '}{transaction.walletName}
+            </Text>
+          ) : null}
           {transaction.createdByName ? (
             <Text style={styles.memberLine} numberOfLines={1} ellipsizeMode="tail">
               {addedByText}
@@ -112,7 +119,7 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isCompact }) => StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -127,7 +134,7 @@ const createStyles = (colors) => StyleSheet.create({
   },
   pressableContent: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: isCompact ? 'column' : 'row',
     alignItems: 'flex-start',
     overflow: 'hidden',
   },
@@ -140,7 +147,13 @@ const createStyles = (colors) => StyleSheet.create({
     marginRight: SPACING.md,
   },
   categoryIcon: { fontSize: 22 },
-  info: { flex: 1, flexShrink: 1, marginRight: SPACING.sm, minWidth: 0 },
+  info: {
+    flex: 1,
+    flexShrink: 1,
+    marginRight: isCompact ? 0 : SPACING.sm,
+    minWidth: 0,
+    width: '100%',
+  },
   category: {
     color: colors.textPrimary,
     fontSize: FONT_SIZE.md,
@@ -159,6 +172,12 @@ const createStyles = (colors) => StyleSheet.create({
     fontFamily: FONT_FAMILY.regular,
     marginTop: 2,
   },
+  walletLine: {
+    color: colors.primary,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.medium,
+    marginTop: 2,
+  },
   time: {
     color: colors.textMuted,
     fontSize: FONT_SIZE.xs,
@@ -166,30 +185,32 @@ const createStyles = (colors) => StyleSheet.create({
     marginTop: 2,
   },
   amountContainer: {
-    alignItems: 'flex-end',
+    alignItems: isCompact ? 'flex-start' : 'flex-end',
     flexShrink: 1,
-    minWidth: 92,
-    maxWidth: '44%',
-    marginLeft: 'auto',
+    minWidth: isCompact ? 0 : 92,
+    maxWidth: isCompact ? '100%' : '44%',
+    marginLeft: isCompact ? 0 : 'auto',
+    marginTop: isCompact ? SPACING.sm : 0,
+    width: isCompact ? '100%' : 'auto',
   },
   amount: {
     fontSize: FONT_SIZE.md,
     fontWeight: FONT_WEIGHT.bold,
     fontFamily: FONT_FAMILY.bold,
-    textAlign: 'right',
+    textAlign: isCompact ? 'left' : 'right',
   },
   amountDetail: {
     color: colors.textMuted,
     fontSize: FONT_SIZE.xs,
     fontFamily: FONT_FAMILY.medium,
     marginTop: 2,
-    textAlign: 'right',
+    textAlign: isCompact ? 'left' : 'right',
   },
   badgeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    alignItems: 'flex-end',
+    justifyContent: isCompact ? 'flex-start' : 'flex-end',
+    alignItems: isCompact ? 'flex-start' : 'flex-end',
     gap: 6,
     marginTop: 4,
   },
@@ -213,9 +234,9 @@ const createStyles = (colors) => StyleSheet.create({
     fontFamily: FONT_FAMILY.semibold,
   },
   deleteBtn: {
-    marginLeft: 8,
+    marginLeft: isCompact ? SPACING.sm : 8,
     padding: 4,
-    alignSelf: 'center',
+    alignSelf: isCompact ? 'flex-start' : 'center',
   },
 });
 

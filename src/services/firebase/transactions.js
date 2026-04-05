@@ -37,6 +37,8 @@ export const addTransaction = async (accountId, actor, transactionData) => {
       type: transactionData.type, // 'income' | 'expense'
       category: transactionData.category,
       categoryId: transactionData.categoryId,
+      walletId: transactionData.walletId || null,
+      walletName: transactionData.walletName || null,
       description: transactionData.description || '',
       date: Timestamp.fromDate(new Date(transactionData.date)),
       receiptUrl: transactionData.receiptUrl || null,
@@ -85,9 +87,17 @@ export const updateTransaction = async (transactionId, updates) => {
     const ref = doc(db, TRANSACTIONS_COLLECTION, transactionId);
     const beforeSnap = await getDoc(ref);
     const previous = beforeSnap.exists() ? beforeSnap.data() : null;
-    await updateDoc(ref, {
+    const payload = {
       ...updates,
       updatedAt: serverTimestamp(),
+    };
+
+    if (updates.date) {
+      payload.date = Timestamp.fromDate(new Date(updates.date));
+    }
+
+    await updateDoc(ref, {
+      ...payload,
     });
     await logAppNotification({
       userId: updates.userId || previous?.userId,

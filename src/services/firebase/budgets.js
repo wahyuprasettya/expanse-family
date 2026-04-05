@@ -17,6 +17,9 @@ import { db } from './config';
 import { serializeFirestoreValue } from '@utils/firestore';
 
 const BUDGETS_COLLECTION = 'budgets';
+const normalizeBudgetWalletId = (walletId) => walletId || null;
+const matchesBudgetWallet = (budget, walletId) =>
+  normalizeBudgetWalletId(budget?.walletId) === normalizeBudgetWalletId(walletId);
 
 // ─── Add Budget ──────────────────────────────────────────────
 export const addBudget = async (userId, budgetData) => {
@@ -26,6 +29,8 @@ export const addBudget = async (userId, budgetData) => {
       categoryId: budgetData.categoryId,
       categoryName: budgetData.categoryName,
       categoryIcon: budgetData.categoryIcon || '📦',
+      walletId: budgetData.walletId || null,
+      walletName: budgetData.walletName || null,
       amount: budgetData.amount,
       period: budgetData.period, // 'monthly' | 'weekly' | 'yearly'
       month: budgetData.month,   // 1-12
@@ -79,7 +84,7 @@ export const subscribeToBudgets = (userId, year, month, callback) => {
 };
 
 // ─── Update Budget Spent ─────────────────────────────────────
-export const updateBudgetSpent = async (userId, categoryId, year, month, amount) => {
+export const updateBudgetSpent = async (userId, categoryId, year, month, amount, walletId = null) => {
   try {
     const q = query(
       collection(db, BUDGETS_COLLECTION),
@@ -89,7 +94,11 @@ export const updateBudgetSpent = async (userId, categoryId, year, month, amount)
       where('month', '==', month)
     );
     const snapshot = await getDocs(q);
-    for (const document of snapshot.docs) {
+    const matchingBudgets = snapshot.docs.filter((document) =>
+      matchesBudgetWallet(document.data(), walletId)
+    );
+
+    for (const document of matchingBudgets) {
       const current = document.data().spent || 0;
       await updateDoc(doc(db, BUDGETS_COLLECTION, document.id), {
         spent: current + amount,

@@ -43,6 +43,7 @@ export const exportManualBackupToJSON = async (userId) => {
 
     const allTransactions = await getUserCollectionData('transactions', userId);
     const savedDebts = await getUserCollectionData('debts', userId);
+    const wallets = sortBackupItems(await getUserCollectionData('wallets', userId));
     const transactions = sortBackupItems(
       allTransactions.filter((transaction) => transaction.type !== 'debt')
     );
@@ -61,6 +62,7 @@ export const exportManualBackupToJSON = async (userId) => {
       data: {
         transactions,
         debts,
+        wallets,
       },
     };
 
@@ -88,6 +90,7 @@ export const exportManualBackupToJSON = async (userId) => {
       counts: {
         transactions: transactions.length,
         debts: debts.length,
+        wallets: wallets.length,
       },
       error: null,
     };
@@ -100,6 +103,7 @@ export const exportManualBackupToJSON = async (userId) => {
       counts: {
         transactions: 0,
         debts: 0,
+        wallets: 0,
       },
       error: error.message,
     };

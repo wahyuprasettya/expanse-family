@@ -4,6 +4,16 @@
 import { createSlice, createSelector } from '@reduxjs/toolkit';
 import { calculateBalance } from '@services/firebase/transactions';
 
+const recalculateTransactionTotals = (state) => {
+  state.balance = calculateBalance(state.items);
+  state.totalIncome = state.items
+    .filter((t) => t.type === 'income')
+    .reduce((sum, t) => sum + t.amount, 0);
+  state.totalExpense = state.items
+    .filter((t) => t.type === 'expense' || t.type === 'debt')
+    .reduce((sum, t) => sum + t.amount, 0);
+};
+
 const transactionSlice = createSlice({
   name: 'transactions',
   initialState: {
@@ -22,13 +32,7 @@ const transactionSlice = createSlice({
   reducers: {
     setTransactions: (state, action) => {
       state.items = action.payload;
-      state.balance = calculateBalance(action.payload);
-      state.totalIncome = action.payload
-        .filter((t) => t.type === 'income')
-        .reduce((s, t) => s + t.amount, 0);
-      state.totalExpense = action.payload
-        .filter((t) => t.type === 'expense' || t.type === 'debt')
-        .reduce((s, t) => s + t.amount, 0);
+      recalculateTransactionTotals(state);
     },
     addTransactionLocal: (state, action) => {
       state.items.unshift(action.payload);
@@ -53,6 +57,17 @@ const transactionSlice = createSlice({
         state.items = state.items.filter((t) => t.id !== action.payload);
       }
     },
+    updateTransactionLocal: (state, action) => {
+      const index = state.items.findIndex((t) => t.id === action.payload.id);
+      if (index === -1) return;
+
+      state.items[index] = {
+        ...state.items[index],
+        ...action.payload,
+      };
+      recalculateTransactionTotals(state);
+      state.items.sort((first, second) => new Date(second.date) - new Date(first.date));
+    },
     setFilter: (state, action) => {
       state.filter = { ...state.filter, ...action.payload };
     },
@@ -69,7 +84,7 @@ const transactionSlice = createSlice({
 });
 
 export const {
-  setTransactions, addTransactionLocal, removeTransactionLocal,
+  setTransactions, addTransactionLocal, removeTransactionLocal, updateTransactionLocal,
   setFilter, clearFilter, setLoading, setError,
 } = transactionSlice.actions;
 

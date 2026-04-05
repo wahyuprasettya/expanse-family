@@ -12,6 +12,7 @@ import assetReducer from './assetSlice';
 import reminderReducer from './reminderSlice';
 import appNotificationReducer from './appNotificationSlice';
 import uiReducer from './uiSlice';
+import walletReducer from './walletSlice';
 import { serializeFirestoreValue } from '@utils/firestore';
 
 const budgetItemsTransform = createTransform(
@@ -41,6 +42,12 @@ const assetPersistConfig = {
   whitelist: ['items'],
 };
 
+const walletPersistConfig = {
+  key: 'wallets',
+  storage: AsyncStorage,
+  whitelist: ['items'],
+};
+
 // Persist configuration for UI preferences
 const uiPersistConfig = {
   key: 'ui',
@@ -52,6 +59,7 @@ const uiPersistConfig = {
 const persistedTransactionReducer = persistReducer(transactionPersistConfig, transactionReducer);
 const persistedBudgetReducer = persistReducer(budgetPersistConfig, budgetReducer);
 const persistedAssetReducer = persistReducer(assetPersistConfig, assetReducer);
+const persistedWalletReducer = persistReducer(walletPersistConfig, walletReducer);
 const persistedUiReducer = persistReducer(uiPersistConfig, uiReducer);
 
 export const store = configureStore({
@@ -61,6 +69,7 @@ export const store = configureStore({
     budgets: persistedBudgetReducer,
     categories: categoryReducer,
     assets: persistedAssetReducer,
+    wallets: persistedWalletReducer,
     reminders: reminderReducer,
     appNotifications: appNotificationReducer,
     ui: persistedUiReducer,

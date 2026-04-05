@@ -47,6 +47,8 @@ Each income or expense entry.
   "type":          "string ('income' | 'expense')",
   "category":      "string (display name, e.g. 'Food & Drink')",
   "categoryId":    "string (e.g. 'food', 'salary', or custom UUID)",
+  "walletId":      "string | null (ref → wallets/{walletId})",
+  "walletName":    "string | null (snapshot display name)",
   "categoryIcon":  "string (emoji, e.g. '🍔')",
   "categoryColor": "string (hex, e.g. '#F97316')",
   "description":   "string (optional, user note)",
@@ -71,7 +73,7 @@ Each income or expense entry.
 
 ### 3. `budgets/{budgetId}`
 
-Monthly spending limits per category.
+Monthly spending limits per category, optionally tied to a specific wallet/funding source.
 
 ```json
 {
@@ -79,6 +81,8 @@ Monthly spending limits per category.
   "categoryId":   "string",
   "categoryName": "string",
   "categoryIcon": "string (emoji)",
+  "walletId":     "string | null (ref → wallets/{walletId})",
+  "walletName":   "string | null (snapshot display name)",
   "amount":       "number (budget limit)",
   "spent":        "number (running total, updated on each expense)",
   "period":       "string ('monthly' | 'weekly' | 'yearly')",
@@ -194,6 +198,28 @@ This document is intended to be updated manually from **Firebase Console** when 
 
 ---
 
+### 8. `wallets/{walletId}`
+
+Funding sources used by transactions, such as cash, bank accounts, and e-wallets.
+
+```json
+{
+  "userId":     "string",
+  "name":       "string",
+  "balance":    "number",
+  "createdAt":  "Timestamp",
+  "updatedAt":  "Timestamp"
+}
+```
+
+**Composite Indexes required:**
+
+| Fields | Order | Purpose |
+|---|---|---|
+| `userId` + `createdAt` | DESC | Wallet sorting |
+
+---
+
 ## Relationships Diagram
 
 ```
@@ -204,6 +230,7 @@ users/{uid}
     ├── reminders/{reminderId}         ← userId field
     └── categories/{categoryId}        ← userId field
     └── assets/{assetId}               ← userId field
+    └── wallets/{walletId}             ← userId field
 ```
 
 > All collections are **top-level** (not subcollections) for easier querying with

@@ -3,13 +3,23 @@
 // ============================================================
 import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from '@hooks/useTranslation';
-import { addTransaction as addTxService, deleteTransaction as deleteTxService } from '@services/firebase/transactions';
-import { selectTransactions, selectBalance, selectFilteredTransactions } from '@store/transactionSlice';
+import {
+  addTransaction as addTxService,
+  deleteTransaction as deleteTxService,
+  updateTransaction as updateTxService,
+} from '@services/firebase/transactions';
+import {
+  selectTransactions,
+  selectBalance,
+  selectFilteredTransactions,
+  updateTransactionLocal,
+} from '@store/transactionSlice';
 import { selectProfile, selectUser } from '@store/authSlice';
 import { updateBudgetSpent } from '@services/firebase/budgets';
 import { sendTransactionNotification, sendBudgetWarningNotification, sendHouseholdNotification } from '@services/firebase/notifications';
 import { selectBudgets } from '@store/budgetSlice';
 import { deleteRemindersByTransactionId, syncDebtReminder } from '@services/firebase/reminders';
+import { adjustWalletBalance } from '@services/firebase/wallets';
 
 export const useTransactions = () => {
   const dispatch = useDispatch();
@@ -54,6 +64,18 @@ export const useTransactions = () => {
         }, t);
       } catch (sideEffectError) {
         console.warn('Debt reminder sync failed:', sideEffectError);
+      }
+    }
+
+    const walletImpact = getWalletImpact(data);
+    if (walletImpact) {
+      try {
+        const { error: walletError } = await adjustWalletBalance(walletImpact.walletId, walletImpact.delta);
+        if (walletError) {
+          throw new Error(walletError);
+        }
+      } catch (sideEffectError) {
+        console.warn('Wallet balance update failed:', sideEffectError);
       }
     }
 
@@ -104,7 +126,14 @@ export const useTransactions = () => {
       // Check budget and warn if needed
       const now = new Date();
       try {
-        await updateBudgetSpent(accountId, data.categoryId, now.getFullYear(), now.getMonth() + 1, data.amount);
+        await updateBudgetSpent(
+          accountId,
+          data.categoryId,
+          now.getFullYear(),
+          now.getMonth() + 1,
+          data.amount,
+          data.walletId || null
+        );
       } catch (sideEffectError) {
         console.warn('Budget spent update failed:', sideEffectError);
       }
@@ -113,7 +142,8 @@ export const useTransactions = () => {
       const budget = budgets.find(
         (b) => b.categoryId === data.categoryId &&
           b.year === now.getFullYear() &&
-          b.month === now.getMonth() + 1
+          b.month === now.getMonth() + 1 &&
+          matchesBudgetWallet(b, data.walletId)
       );
       if (budget && budget.amount > 0) {
         const newSpent = (budget.spent || 0) + data.amount;
@@ -154,16 +184,207 @@ export const useTransactions = () => {
     return { id, error: null };
   };
 
+  const updateTransaction = async (txId, data) => {
+    if (!user?.uid || !accountId) return { error: 'Not authenticated' };
+
+    const previous = transactions.find((transaction) => transaction.id === txId);
+    if (!previous) return { error: 'Transaction not found' };
+
+    const updates = {
+      amount: data.amount,
+      type: data.type,
+      category: data.category,
+      categoryId: data.categoryId,
+      walletId: data.walletId || null,
+      walletName: data.walletName || null,
+      categoryIcon: data.categoryIcon,
+      categoryColor: data.categoryColor,
+      description: data.description || '',
+      date: data.date,
+      debtMeta: data.debtMeta || null,
+      updatedByUid: user.uid,
+      updatedByName: user.displayName || user.email || 'Member',
+      userId: previous.userId || user.uid,
+    };
+
+    const { error } = await updateTxService(txId, updates);
+    if (error) {
+      return { error };
+    }
+
+    dispatch(updateTransactionLocal({
+      id: txId,
+      ...updates,
+      date: new Date(data.date).toISOString(),
+    }));
+
+    const previousBudgetKey = getExpenseBudgetKey(previous);
+    const nextBudgetKey = data.type === 'expense'
+      ? getExpenseBudgetKey({
+          categoryId: data.categoryId,
+          walletId: data.walletId,
+          date: data.date,
+          type: data.type,
+        })
+      : null;
+    const previousWalletImpact = getWalletImpact(previous);
+    const nextWalletImpact = getWalletImpact(data);
+
+    try {
+      if (previousBudgetKey && nextBudgetKey
+        && previousBudgetKey.categoryId === nextBudgetKey.categoryId
+        && previousBudgetKey.year === nextBudgetKey.year
+        && previousBudgetKey.month === nextBudgetKey.month
+        && previousBudgetKey.walletId === nextBudgetKey.walletId) {
+        const delta = data.amount - previous.amount;
+        if (delta !== 0) {
+          await updateBudgetSpent(
+            accountId,
+            nextBudgetKey.categoryId,
+            nextBudgetKey.year,
+            nextBudgetKey.month,
+            delta,
+            nextBudgetKey.walletId
+          );
+        }
+      } else {
+        if (previousBudgetKey) {
+          await updateBudgetSpent(
+            accountId,
+            previousBudgetKey.categoryId,
+            previousBudgetKey.year,
+            previousBudgetKey.month,
+            -previous.amount,
+            previousBudgetKey.walletId
+          );
+        }
+
+        if (nextBudgetKey) {
+          await updateBudgetSpent(
+            accountId,
+            nextBudgetKey.categoryId,
+            nextBudgetKey.year,
+            nextBudgetKey.month,
+            data.amount,
+            nextBudgetKey.walletId
+          );
+        }
+      }
+    } catch (sideEffectError) {
+      console.warn('Budget adjustment on transaction update failed:', sideEffectError);
+    }
+
+    try {
+      if (previousWalletImpact && nextWalletImpact && previousWalletImpact.walletId === nextWalletImpact.walletId) {
+        const delta = nextWalletImpact.delta - previousWalletImpact.delta;
+        if (delta !== 0) {
+          const { error: walletError } = await adjustWalletBalance(nextWalletImpact.walletId, delta);
+          if (walletError) {
+            throw new Error(walletError);
+          }
+        }
+      } else {
+        if (previousWalletImpact) {
+          const { error: previousWalletError } = await adjustWalletBalance(previousWalletImpact.walletId, -previousWalletImpact.delta);
+          if (previousWalletError) {
+            throw new Error(previousWalletError);
+          }
+        }
+        if (nextWalletImpact) {
+          const { error: nextWalletError } = await adjustWalletBalance(nextWalletImpact.walletId, nextWalletImpact.delta);
+          if (nextWalletError) {
+            throw new Error(nextWalletError);
+          }
+        }
+      }
+    } catch (sideEffectError) {
+      console.warn('Wallet adjustment on transaction update failed:', sideEffectError);
+    }
+
+    try {
+      if (data.type === 'debt' && data.debtMeta?.dueDate) {
+        await syncDebtReminder({
+          transactionId: txId,
+          userId: user.uid,
+          creditorName: data.debtMeta.creditorName,
+          category: data.category,
+          amount: data.amount,
+          dueDate: data.debtMeta.dueDate,
+          remindDaysBefore: data.debtMeta.remindDaysBefore ?? 3,
+        }, t);
+      } else if (previous.type === 'debt') {
+        await deleteRemindersByTransactionId(txId);
+      }
+    } catch (sideEffectError) {
+      console.warn('Debt reminder update failed:', sideEffectError);
+    }
+
+    if (accountId) {
+      try {
+        await sendHouseholdNotification(
+          accountId,
+          user.uid,
+          {
+            title: t('transactionNotification.householdUpdatedTitle', {
+              name: user.displayName || t('profile.fallbackUser'),
+            }),
+            body: t('transactionNotification.householdUpdatedBody', {
+              category: data.category,
+              amount: formatCurrency(data.amount, language),
+            }),
+            data: {
+              transactionId: txId,
+              type: 'household_transaction',
+              action: 'updated'
+            },
+          }
+        );
+      } catch (sideEffectError) {
+        console.warn('Update household notification failed:', sideEffectError);
+      }
+    }
+
+    return { error: null };
+  };
+
   const deleteTransaction = async (txId) => {
     // Get transaction details before deletion for notification
     const transactionToDelete = transactions.find(tx => tx.id === txId);
 
     const { error } = await deleteTxService(txId);
     if (!error) {
+      const budgetKey = getExpenseBudgetKey(transactionToDelete);
+      const walletImpact = getWalletImpact(transactionToDelete);
       try {
         await deleteRemindersByTransactionId(txId);
       } catch (sideEffectError) {
         console.warn('Delete reminders failed:', sideEffectError);
+      }
+
+      if (budgetKey) {
+        try {
+          await updateBudgetSpent(
+            accountId,
+            budgetKey.categoryId,
+            budgetKey.year,
+            budgetKey.month,
+            -transactionToDelete.amount,
+            budgetKey.walletId
+          );
+        } catch (sideEffectError) {
+          console.warn('Budget adjustment on transaction delete failed:', sideEffectError);
+        }
+      }
+
+      if (walletImpact) {
+        try {
+          const { error: walletError } = await adjustWalletBalance(walletImpact.walletId, -walletImpact.delta);
+          if (walletError) {
+            throw new Error(walletError);
+          }
+        } catch (sideEffectError) {
+          console.warn('Wallet adjustment on transaction delete failed:', sideEffectError);
+        }
       }
 
       // Send notification to household members when transaction is deleted.
@@ -195,7 +416,7 @@ export const useTransactions = () => {
     return { error };
   };
 
-  return { transactions, filteredTransactions, balance, addTransaction, deleteTransaction };
+  return { transactions, filteredTransactions, balance, addTransaction, updateTransaction, deleteTransaction };
 };
 
 const formatCurrency = (amount, language) =>
@@ -221,5 +442,39 @@ const getTransactionNotificationConfig = (type, categoryIcon, t) => {
   return {
     ...config,
     title: `${config.icon} ${config.title}`,
+  };
+};
+
+const getExpenseBudgetKey = (transaction) => {
+  if (!transaction || transaction.type !== 'expense' || !transaction.categoryId || !transaction.date) {
+    return null;
+  }
+
+  const date = new Date(transaction.date);
+  return {
+    categoryId: transaction.categoryId,
+    walletId: normalizeBudgetWalletId(transaction.walletId),
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+  };
+};
+
+const normalizeBudgetWalletId = (walletId) => walletId || null;
+const matchesBudgetWallet = (budget, walletId) =>
+  normalizeBudgetWalletId(budget?.walletId) === normalizeBudgetWalletId(walletId);
+
+const getWalletImpact = (transaction) => {
+  if (!transaction?.walletId || !transaction?.amount) {
+    return null;
+  }
+
+  const amount = Number(transaction.amount) || 0;
+  if (amount === 0) {
+    return null;
+  }
+
+  return {
+    walletId: transaction.walletId,
+    delta: transaction.type === 'income' ? amount : -amount,
   };
 };

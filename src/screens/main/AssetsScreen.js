@@ -33,6 +33,15 @@ const ASSET_TYPE_META = {
 
 const formatMoney = (value, language) => new Intl.NumberFormat(language === 'en' ? 'en-US' : 'id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(value || 0);
 const isGramUnit = (unit) => GRAM_UNITS.includes(String(unit || '').trim().toLowerCase());
+const createInitialAssetForm = () => ({
+  name: '',
+  type: 'gold',
+  unit: 'gram',
+  quantity: '',
+  buyPrice: '',
+  currentPrice: '',
+  notes: '',
+});
 const getAssetMeta = (colors, type) => {
   const meta = ASSET_TYPE_META[type] || ASSET_TYPE_META.other;
   const palette = colors.gradients[meta.gradientKey] || colors.gradients.card;
@@ -71,15 +80,8 @@ export const AssetsScreen = ({ navigation }) => {
     isFallback: false,
     error: null,
   });
-  const [form, setForm] = useState({
-    name: '',
-    type: 'gold',
-    unit: 'gram',
-    quantity: '',
-    buyPrice: '',
-    currentPrice: '',
-    notes: '',
-  });
+  const [form, setForm] = useState(createInitialAssetForm);
+  const [goldPriceMode, setGoldPriceMode] = useState('manual');
 
   const setField = (key) => (value) => setForm((prev) => ({ ...prev, [key]: value }));
   const applyLiveGoldPrice = () => {
@@ -90,9 +92,10 @@ export const AssetsScreen = ({ navigation }) => {
       unit: isGramUnit(prev.unit) ? prev.unit : 'gram',
       currentPrice: formatRupiahInput(String(goldMarket.pricePerGramIdr)),
     }));
+    setGoldPriceMode('reference');
   };
 
-  const loadGoldPrice = async () => {
+  const loadGoldPrice = async (applyAfterLoad = false) => {
     setGoldMarket((prev) => ({ ...prev, isLoading: true, error: null }));
 
     const { data, error } = await fetchGoldPricePerGramInIdr();
@@ -114,6 +117,15 @@ export const AssetsScreen = ({ navigation }) => {
       isFallback: Boolean(data.isFallback),
       error: null,
     });
+
+    if (applyAfterLoad && data.pricePerGramIdr) {
+      setForm((prev) => ({
+        ...prev,
+        unit: isGramUnit(prev.unit) ? prev.unit : 'gram',
+        currentPrice: formatRupiahInput(String(data.pricePerGramIdr)),
+      }));
+      setGoldPriceMode('reference');
+    }
   };
 
   const handleSelectType = (type) => {
@@ -122,13 +134,15 @@ export const AssetsScreen = ({ navigation }) => {
 
       if (type === 'gold') {
         nextForm.unit = isGramUnit(prev.unit) ? prev.unit : 'gram';
-        if (!prev.currentPrice && goldMarket.pricePerGramIdr) {
-          nextForm.currentPrice = formatRupiahInput(String(goldMarket.pricePerGramIdr));
-        }
+      } else {
+        nextForm.unit = '';
+        nextForm.currentPrice = '';
       }
 
       return nextForm;
     });
+
+    setGoldPriceMode('manual');
   };
 
   useEffect(() => {
@@ -167,16 +181,6 @@ export const AssetsScreen = ({ navigation }) => {
     };
   }, []);
 
-  useEffect(() => {
-    if (!showAddModal || form.type !== 'gold' || form.currentPrice || !goldMarket.pricePerGramIdr) return;
-
-    setForm((prev) => ({
-      ...prev,
-      unit: isGramUnit(prev.unit) ? prev.unit : 'gram',
-      currentPrice: formatRupiahInput(String(goldMarket.pricePerGramIdr)),
-    }));
-  }, [form.currentPrice, form.type, goldMarket.pricePerGramIdr, showAddModal]);
-
   const formattedGoldUpdatedAt = useMemo(() => {
     if (goldMarket.updatedAtLabel) return goldMarket.updatedAtLabel;
     if (!goldMarket.updatedAt) return '';
@@ -208,7 +212,11 @@ export const AssetsScreen = ({ navigation }) => {
     const qty = Number(asset.quantity) || 0;
     const buyPrice = Number(asset.buyPrice) || 0;
     const savedCurrentPrice = Number(asset.currentPrice) || 0;
-    const useLiveGoldPrice = asset.type === 'gold' && isGramUnit(asset.unit) && Number(goldMarket.pricePerGramIdr) > 0;
+    const goldPricingMode = asset.priceSourceMode || (asset.type === 'gold' && isGramUnit(asset.unit) ? 'reference' : 'manual');
+    const useLiveGoldPrice = asset.type === 'gold'
+      && goldPricingMode === 'reference'
+      && isGramUnit(asset.unit)
+      && Number(goldMarket.pricePerGramIdr) > 0;
     const currentPrice = useLiveGoldPrice ? goldMarket.pricePerGramIdr : savedCurrentPrice;
     const cost = qty * buyPrice;
     const value = qty * currentPrice;
@@ -251,15 +259,11 @@ export const AssetsScreen = ({ navigation }) => {
   }
 
   const handleAdd = async () => {
-    const liveGoldCurrentPrice = form.type === 'gold' && isGramUnit(form.unit) && goldMarket.pricePerGramIdr
-      ? goldMarket.pricePerGramIdr
-      : 0;
-
     if (!form.name.trim()) {
       Alert.alert(t('common.error'), t('assets.nameRequired'));
       return;
     }
-    if (!form.quantity || !form.buyPrice || (!form.currentPrice && !liveGoldCurrentPrice)) {
+    if (!form.quantity || !form.buyPrice || !form.currentPrice || !form.unit.trim()) {
       Alert.alert(t('common.error'), t('assets.fillAllFields'));
       return;
     }
@@ -268,7 +272,8 @@ export const AssetsScreen = ({ navigation }) => {
       ...form,
       quantity: Number(form.quantity),
       buyPrice: parseAmount(form.buyPrice),
-      currentPrice: form.currentPrice ? parseAmount(form.currentPrice) : liveGoldCurrentPrice,
+      currentPrice: parseAmount(form.currentPrice),
+      priceSourceMode: form.type === 'gold' ? goldPriceMode : 'manual',
     };
 
     dispatch(addAssetLocal(assetPayload));
@@ -297,8 +302,15 @@ export const AssetsScreen = ({ navigation }) => {
         }
       }
     }
-    setForm({ name: '', type: 'gold', unit: 'gram', quantity: '', buyPrice: '', currentPrice: '', notes: '' });
+    setForm(createInitialAssetForm());
+    setGoldPriceMode('manual');
     setShowAddModal(false);
+  };
+
+  const openAddModal = () => {
+    setForm(createInitialAssetForm());
+    setGoldPriceMode('manual');
+    setShowAddModal(true);
   };
 
   return (
@@ -324,7 +336,7 @@ export const AssetsScreen = ({ navigation }) => {
               <Text style={styles.heroEyebrow}>{t('assets.portfolioBreakdown')}</Text>
               <Text style={styles.heroTitle}>{t('assets.portfolioValue')}</Text>
             </View>
-            <TouchableOpacity style={styles.heroAddBtn} onPress={() => setShowAddModal(true)}>
+            <TouchableOpacity style={styles.heroAddBtn} onPress={openAddModal}>
               <Ionicons name="add" size={18} color={colors.textInverse} />
             </TouchableOpacity>
           </View>
@@ -423,7 +435,7 @@ export const AssetsScreen = ({ navigation }) => {
             </View>
             <Text style={styles.emptyText}>{t('assets.emptyTitle')}</Text>
             <Text style={styles.emptySub}>{t('assets.emptySubtitle')}</Text>
-            <TouchableOpacity style={styles.emptyActionBtn} onPress={() => setShowAddModal(true)}>
+            <TouchableOpacity style={styles.emptyActionBtn} onPress={openAddModal}>
               <Ionicons name="add" size={16} color="#FFF" />
               <Text style={styles.emptyActionText}>{t('assets.addAsset')}</Text>
             </TouchableOpacity>
@@ -569,20 +581,65 @@ export const AssetsScreen = ({ navigation }) => {
                 ))}
               </View>
               <Text style={styles.fieldLabel}>{t('assets.unit')}</Text>
-              <TextInput style={styles.input} value={form.unit} onChangeText={setField('unit')} placeholder="gram / pcs / unit" placeholderTextColor={colors.textMuted} />
+              <TextInput
+                style={styles.input}
+                value={form.unit}
+                onChangeText={(value) => {
+                  setField('unit')(value);
+                  if (form.type === 'gold' && !isGramUnit(value)) {
+                    setGoldPriceMode('manual');
+                  }
+                }}
+                placeholder="gram / pcs / unit"
+                placeholderTextColor={colors.textMuted}
+              />
               <Text style={styles.fieldLabel}>{t('assets.quantity')}</Text>
               <TextInput style={styles.input} keyboardType="numeric" value={form.quantity} onChangeText={setField('quantity')} placeholder="0" placeholderTextColor={colors.textMuted} />
               <Text style={styles.fieldLabel}>{t('assets.buyPrice')}</Text>
               <TextInput style={styles.input} keyboardType="numeric" value={form.buyPrice} onChangeText={(value) => setField('buyPrice')(formatRupiahInput(value))} placeholder="1.000.000" placeholderTextColor={colors.textMuted} />
+              {form.type === 'gold' && (
+                <>
+                  <Text style={styles.fieldLabel}>{t('assets.goldPriceModeLabel')}</Text>
+                  <View style={styles.chipRow}>
+                    <TouchableOpacity
+                      style={[styles.chip, goldPriceMode === 'reference' && styles.chipActive]}
+                      onPress={goldMarket.pricePerGramIdr ? applyLiveGoldPrice : () => loadGoldPrice(true)}
+                      disabled={goldMarket.isLoading}
+                    >
+                      <Text style={[styles.chipText, goldPriceMode === 'reference' && styles.chipTextActive]}>
+                        {goldMarket.isFallback ? t('assets.useFallbackPrice') : t('assets.useReferencePrice')}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.chip, goldPriceMode === 'manual' && styles.chipActive]}
+                      onPress={() => setGoldPriceMode('manual')}
+                    >
+                      <Text style={[styles.chipText, goldPriceMode === 'manual' && styles.chipTextActive]}>
+                        {t('assets.useManualGoldPrice')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
               <Text style={styles.fieldLabel}>{t('assets.currentPrice')}</Text>
-              <TextInput style={styles.input} keyboardType="numeric" value={form.currentPrice} onChangeText={(value) => setField('currentPrice')(formatRupiahInput(value))} placeholder="1.000.000" placeholderTextColor={colors.textMuted} />
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={form.currentPrice}
+                onChangeText={(value) => {
+                  setGoldPriceMode('manual');
+                  setField('currentPrice')(formatRupiahInput(value));
+                }}
+                placeholder="1.000.000"
+                placeholderTextColor={colors.textMuted}
+              />
               {form.type === 'gold' && (
                 <>
                   <TouchableOpacity
                     style={styles.livePriceCard}
                     activeOpacity={0.8}
                     disabled={goldMarket.isLoading}
-                    onPress={goldMarket.pricePerGramIdr ? applyLiveGoldPrice : loadGoldPrice}
+                    onPress={goldMarket.pricePerGramIdr ? applyLiveGoldPrice : () => loadGoldPrice(false)}
                   >
                     <View style={styles.livePriceContent}>
                       <Ionicons name="flash-outline" size={16} color={goldMarket.pricePerGramIdr ? colors.primary : colors.textMuted} />
@@ -601,6 +658,9 @@ export const AssetsScreen = ({ navigation }) => {
                       {goldMarket.pricePerGramIdr ? t('assets.useLivePrice') : t('assets.refresh')}
                     </Text>
                   </TouchableOpacity>
+                  <Text style={styles.helper}>
+                    {goldPriceMode === 'reference' ? t('assets.referenceModeHint') : t('assets.manualModeHint')}
+                  </Text>
                   {goldMarketMetaText ? (
                     <Text style={styles.helper}>{goldMarketMetaText}</Text>
                   ) : null}

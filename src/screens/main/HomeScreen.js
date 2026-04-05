@@ -8,10 +8,11 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { selectUser } from '@store/authSlice';
 import { selectBalance, selectTotalIncome, selectTotalExpense, selectTransactions, selectTransactionsLoading } from '@store/transactionSlice';
 import { selectCategories } from '@store/categorySlice';
+import { selectTotalWalletBalance, selectWallets } from '@store/walletSlice';
 import { selectUpcomingReminders, selectRemindersLoading } from '@store/reminderSlice';
 import { selectBudgetsLoading } from '@store/budgetSlice';
 import { selectUnreadAppNotificationCount } from '@store/appNotificationSlice';
@@ -27,12 +28,15 @@ import { useAppTheme } from '@hooks/useAppTheme';
 export const HomeScreen = ({ navigation }) => {
   const { t, language } = useTranslation();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isCompact = width < 390;
   const isNarrow = width < 350;
   const { colors, isDark } = useAppTheme();
-  const styles = createStyles(colors, { isCompact, isNarrow });
+  const styles = createStyles(colors, { isCompact, isNarrow, bottomInset: insets.bottom });
   const user = useSelector(selectUser);
   const balance = useSelector(selectBalance);
+  const wallets = useSelector(selectWallets);
+  const totalWalletBalance = useSelector(selectTotalWalletBalance);
   const totalIncome = useSelector(selectTotalIncome);
   const totalExpense = useSelector(selectTotalExpense);
   const transactions = useSelector(selectTransactions);
@@ -79,6 +83,7 @@ export const HomeScreen = ({ navigation }) => {
     ]);
   };
   const firstName = user?.displayName?.split(' ')[0] || t('home.defaultName');
+  const displayBalance = wallets.length > 0 ? totalWalletBalance : balance;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? t('home.morning') : hour < 17 ? t('home.afternoon') : t('home.evening');
@@ -129,15 +134,19 @@ export const HomeScreen = ({ navigation }) => {
 
   if (showInitialLoading) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <LoadingState />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.containerContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
         <LinearGradient colors={colors.gradients.header} style={styles.header}>
           <View style={styles.headerTop}>
@@ -230,7 +239,7 @@ export const HomeScreen = ({ navigation }) => {
               adjustsFontSizeToFit
               minimumFontScale={0.72}
             >
-              {formatCurrencyFull(balance, 'IDR', language)}
+              {formatCurrencyFull(displayBalance, 'IDR', language)}
             </Text>
 
             <View style={styles.balanceRow}>
@@ -294,6 +303,9 @@ export const HomeScreen = ({ navigation }) => {
                   <Text style={styles.alertIcon}>{budget.categoryIcon || '📦'}</Text>
                   <View style={styles.alertInfo}>
                     <Text style={styles.alertTitle}>{budget.categoryName}</Text>
+                    <Text style={styles.alertSource}>
+                      {t('budget.fundingSource')}: {budget.walletDisplayName}
+                    </Text>
                     <Text style={styles.alertSubtitle}>{budget.message}</Text>
                   </View>
                   <View style={styles.alertMeta}>
@@ -408,9 +420,10 @@ export const HomeScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors, { isCompact, isNarrow }) => StyleSheet.create({
+const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1, backgroundColor: colors.background },
+  containerContent: { paddingBottom: Math.max(bottomInset + 110, 140) },
   header: {
     paddingHorizontal: 0,
     paddingBottom: isCompact ? SPACING.md : SPACING.lg,
@@ -615,6 +628,7 @@ const createStyles = (colors, { isCompact, isNarrow }) => StyleSheet.create({
   alertIcon: { fontSize: 24, marginRight: SPACING.sm, marginTop: 2 },
   alertInfo: { flex: 1, minWidth: 0, paddingRight: SPACING.xs },
   alertTitle: { color: colors.textPrimary, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
+  alertSource: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.medium, marginTop: 2 },
   alertSubtitle: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 2 },
   alertMeta: { alignItems: 'flex-end', marginRight: SPACING.xs, flexShrink: 0 },
   alertMetaValue: { color: colors.warning, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.bold },
@@ -657,7 +671,7 @@ const createStyles = (colors, { isCompact, isNarrow }) => StyleSheet.create({
   emptySubtext: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, marginTop: 4 },
   fab: {
     position: 'absolute',
-    bottom: 90,
+    bottom: Math.max(bottomInset + 24, 90),
     right: isCompact ? SPACING.md : SPACING.lg,
     borderRadius: BORDER_RADIUS.full,
     ...SHADOWS.lg,
@@ -667,7 +681,7 @@ const createStyles = (colors, { isCompact, isNarrow }) => StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center', justifyContent: 'center',
   },
-  bottomSpacer: { height: 80 },
+  bottomSpacer: { height: Math.max(bottomInset + 32, 96) },
 });
 
 export default HomeScreen;

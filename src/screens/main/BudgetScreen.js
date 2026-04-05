@@ -3,7 +3,7 @@
 // ============================================================
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, useWindowDimensions,
   Alert, Modal, ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,16 +11,22 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectProfile, selectUser } from '@store/authSlice';
-import { selectBudgets, selectBudgetsLoading, removeBudgetLocal } from '@store/budgetSlice';
+import {
+  selectBudgets,
+  selectBudgetsLoading,
+  removeBudgetLocal,
+  updateBudgetLocal,
+} from '@store/budgetSlice';
 import { selectTransactions } from '@store/transactionSlice';
-import { addBudget, deleteBudget } from '@services/firebase/budgets';
+import { selectWallets } from '@store/walletSlice';
+import { addBudget, deleteBudget, updateBudget } from '@services/firebase/budgets';
 import { selectCategories } from '@store/categorySlice';
 import BudgetCard from '@components/budget/BudgetCard';
 import Button from '@components/common/Button';
 import Input from '@components/common/Input';
 import LoadingState from '@components/common/LoadingState';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
-import { formatCurrency, formatDate, parseAmount } from '@utils/formatters';
+import { formatCurrency, formatDate, formatRupiahInput, parseAmount } from '@utils/formatters';
 import { calcBudgetUsage, getBudgetStatus, isExpenseTransaction } from '@utils/calculations';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
@@ -28,52 +34,127 @@ import { useAppTheme } from '@hooks/useAppTheme';
 export const BudgetScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { t, language } = useTranslation();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 380;
+  const categoryColumns = width < 360 ? 2 : 3;
   const { colors } = useAppTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, { isCompact, categoryColumns });
   const user = useSelector(selectUser);
   const profile = useSelector(selectProfile);
   const budgets = useSelector(selectBudgets);
   const budgetsLoading = useSelector(selectBudgetsLoading);
   const transactions = useSelector(selectTransactions);
   const categories = useSelector(selectCategories);
+  const wallets = useSelector(selectWallets);
   const accountId = profile?.householdId || user?.uid;
   const now = new Date();
   const [year] = useState(now.getFullYear());
   const [month] = useState(now.getMonth() + 1);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedWallet, setSelectedWallet] = useState(null);
   const [budgetAmount, setBudgetAmount] = useState('');
+  const [editingBudget, setEditingBudget] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleAdd = async () => {
+  const resetBudgetForm = () => {
+    setShowAddModal(false);
+    setShowWalletModal(false);
+    setSelectedCategory(null);
+    setSelectedWallet(null);
+    setBudgetAmount('');
+    setEditingBudget(null);
+  };
+
+  const openAddBudgetModal = () => {
+    setEditingBudget(null);
+    setSelectedCategory(null);
+    setSelectedWallet(null);
+    setBudgetAmount('');
+    setShowAddModal(true);
+  };
+
+  const openEditBudgetModal = (budget) => {
+    const category = categories.find((item) => item.id === budget.categoryId) || {
+      id: budget.categoryId,
+      name: budget.categoryName,
+      icon: budget.categoryIcon || '📦',
+      type: 'expense',
+      isDefault: false,
+    };
+    const wallet = wallets.find((item) => item.id === budget.walletId) || (
+      budget.walletId
+        ? {
+            id: budget.walletId,
+            name: budget.walletName,
+            balance: 0,
+          }
+        : null
+    );
+
+    setEditingBudget(budget);
+    setSelectedCategory(category);
+    setSelectedWallet(wallet);
+    setBudgetAmount(formatRupiahInput(String(budget.amount || '')));
+    setShowAddModal(true);
+  };
+
+  const handleSubmitBudget = async () => {
     if (!selectedCategory || !budgetAmount || parseAmount(budgetAmount) <= 0) {
       Alert.alert(t('common.error'), t('budget.fillAllFields'));
       return;
     }
-
-    const categoryName = getCategoryDisplayName(selectedCategory);
-
-    setLoading(true);
-    const { error } = await addBudget(accountId, {
-      categoryId: selectedCategory.id,
-      categoryName,
-      categoryIcon: selectedCategory.icon,
-      amount: parseAmount(budgetAmount),
-      period: 'monthly',
-      month,
-      year,
-      spent: 0,
-    });
-    setLoading(false);
-
-    if (error) {
-      Alert.alert(t('common.error'), error);
+    if (wallets.length > 0 && !selectedWallet) {
+      Alert.alert(t('common.error'), t('budget.walletRequired'));
       return;
     }
 
-    setShowAddModal(false);
-    setSelectedCategory(null);
-    setBudgetAmount('');
+    const categoryName = getCategoryDisplayName(selectedCategory);
+    const parsedAmount = parseAmount(budgetAmount);
+    const nextWalletId = selectedWallet?.id || null;
+    const nextWalletName = selectedWallet?.name || null;
+
+    setLoading(true);
+    const result = editingBudget
+      ? await updateBudget(editingBudget.id, {
+          amount: parsedAmount,
+          categoryName,
+          categoryIcon: selectedCategory.icon,
+          walletId: nextWalletId,
+          walletName: nextWalletName,
+        })
+      : await addBudget(accountId, {
+          categoryId: selectedCategory.id,
+          categoryName,
+          categoryIcon: selectedCategory.icon,
+          walletId: nextWalletId,
+          walletName: nextWalletName,
+          amount: parsedAmount,
+          period: 'monthly',
+          month,
+          year,
+          spent: 0,
+        });
+    setLoading(false);
+
+    if (result?.error) {
+      Alert.alert(t('common.error'), result.error);
+      return;
+    }
+
+    if (editingBudget) {
+      dispatch(updateBudgetLocal({
+        id: editingBudget.id,
+        amount: parsedAmount,
+        categoryName,
+        categoryIcon: selectedCategory.icon,
+        walletId: nextWalletId,
+        walletName: nextWalletName,
+      }));
+    }
+
+    resetBudgetForm();
   };
 
   const handleDelete = (budgetId) => {
@@ -100,8 +181,19 @@ export const BudgetScreen = ({ navigation }) => {
     return category?.name || '';
   };
 
+  const walletOptions = useMemo(() => {
+    if (!selectedWallet) {
+      return wallets;
+    }
+
+    return wallets.some((wallet) => wallet.id === selectedWallet.id)
+      ? wallets
+      : [selectedWallet, ...wallets];
+  }, [selectedWallet, wallets]);
+
   const budgetList = useMemo(() => {
     const categoryMap = new Map(categories.map((category) => [category.id, category]));
+    const walletMap = new Map(wallets.map((wallet) => [wallet.id, wallet]));
     const monthlySpending = transactions
       .filter((transaction) => {
         const date = new Date(transaction.date);
@@ -112,28 +204,27 @@ export const BudgetScreen = ({ navigation }) => {
         );
       })
       .reduce((accumulator, transaction) => {
-        accumulator[transaction.categoryId] = (accumulator[transaction.categoryId] || 0) + transaction.amount;
+        const categoryKey = transaction.categoryId;
+        const walletKey = getBudgetWalletKey(transaction.categoryId, transaction.walletId);
+        accumulator.byCategory[categoryKey] = (accumulator.byCategory[categoryKey] || 0) + transaction.amount;
+        accumulator.byCategoryWallet[walletKey] = (accumulator.byCategoryWallet[walletKey] || 0) + transaction.amount;
         return accumulator;
-      }, {});
+      }, { byCategory: {}, byCategoryWallet: {} });
 
     const getStatusLabel = (status) => {
-      if (language === 'en') {
-        if (status === 'exceeded') return 'Exceeded';
-        if (status === 'critical') return 'Almost gone';
-        if (status === 'warning') return 'Warning';
-        return 'Safe';
-      }
-
-      if (status === 'exceeded') return 'Terlampaui';
-      if (status === 'critical') return 'Hampir habis';
-      if (status === 'warning') return 'Waspada';
-      return 'Aman';
+      if (status === 'exceeded') return t('budget.statusExceeded');
+      if (status === 'critical') return t('budget.statusCritical');
+      if (status === 'warning') return t('budget.statusWarning');
+      return t('budget.statusSafe');
     };
 
     return budgets
       .map((budget) => {
         const category = categoryMap.get(budget.categoryId);
-        const spent = monthlySpending[budget.categoryId] || 0;
+        const resolvedWalletName = walletMap.get(budget.walletId)?.name || budget.walletName || null;
+        const spent = budget.walletId
+          ? (monthlySpending.byCategoryWallet[getBudgetWalletKey(budget.categoryId, budget.walletId)] || 0)
+          : (monthlySpending.byCategory[budget.categoryId] || 0);
         const usagePercentage = calcBudgetUsage(spent, budget.amount);
         const status = getBudgetStatus(usagePercentage);
         const categoryName = getCategoryDisplayName(category || {
@@ -141,34 +232,30 @@ export const BudgetScreen = ({ navigation }) => {
           name: budget.categoryName,
           isDefault: false,
         });
+        const budgetSubject = getBudgetSubject(t, categoryName, resolvedWalletName);
+        const walletDisplayName = resolvedWalletName || t('budget.allFundingSources');
 
         return {
           ...budget,
           categoryName,
           categoryIcon: category?.icon || budget.categoryIcon,
+          walletName: resolvedWalletName,
+          walletDisplayName,
           spent,
           usagePercentage,
           status,
           statusLabel: getStatusLabel(status),
           message: status === 'exceeded'
-            ? (language === 'en'
-                ? `${categoryName} budget has been exceeded`
-                : `Budget ${categoryName} sudah terlampaui`)
+            ? t('budget.messageExceeded', { subject: budgetSubject })
             : status === 'critical'
-              ? (language === 'en'
-                  ? `${categoryName} budget is almost gone`
-                  : `Budget ${categoryName} hampir habis`)
+              ? t('budget.messageCritical', { subject: budgetSubject })
               : status === 'warning'
-                ? (language === 'en'
-                    ? `${categoryName} budget is already used ${usagePercentage}%`
-                    : `Budget ${categoryName} sudah terpakai ${usagePercentage}%`)
-                : (language === 'en'
-                    ? `${categoryName} budget is still safe`
-                    : `Budget ${categoryName} kamu masih aman`),
+                ? t('budget.messageWarning', { subject: budgetSubject, percent: usagePercentage })
+                : t('budget.messageSafe', { subject: budgetSubject }),
         };
       })
       .sort((first, second) => second.usagePercentage - first.usagePercentage);
-  }, [budgets, categories, transactions, year, month, language, t]);
+  }, [budgets, categories, language, month, t, transactions, wallets, year]);
 
   const totalBudget = budgetList.reduce((sum, budget) => sum + budget.amount, 0);
   const totalSpent = budgetList.reduce((sum, budget) => sum + (budget.spent || 0), 0);
@@ -181,7 +268,7 @@ export const BudgetScreen = ({ navigation }) => {
         <LinearGradient colors={colors.gradients.header} style={styles.header}>
           <Text style={styles.title}>{t('budget.title')}</Text>
           <Text style={styles.subtitle}>{formatDate(new Date(year, month - 1, 1), 'MMM yyyy', language)}</Text>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
+          <TouchableOpacity style={styles.addBtn} onPress={openAddBudgetModal}>
             <Ionicons name="add" size={24} color={colors.primary} />
           </TouchableOpacity>
         </LinearGradient>
@@ -195,7 +282,7 @@ export const BudgetScreen = ({ navigation }) => {
       <LinearGradient colors={colors.gradients.header} style={styles.header}>
         <Text style={styles.title}>{t('budget.title')}</Text>
         <Text style={styles.subtitle}>{formatDate(new Date(year, month - 1, 1), 'MMM yyyy', language)}</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
+        <TouchableOpacity style={styles.addBtn} onPress={openAddBudgetModal}>
           <Ionicons name="add" size={24} color={colors.primary} />
         </TouchableOpacity>
       </LinearGradient>
@@ -238,12 +325,10 @@ export const BudgetScreen = ({ navigation }) => {
           </View>
           <View style={styles.sharedAssetInfo}>
             <Text style={styles.sharedAssetTitle}>
-              {language === 'en' ? 'Manage shared household assets' : 'Kelola aset akun gabungan'}
+              {t('budget.sharedAssetsTitle')}
             </Text>
             <Text style={styles.sharedAssetSubtitle}>
-              {language === 'en'
-                ? 'Assets from both accounts are available in one shared place.'
-                : 'Aset dari kedua akun sekarang tersedia di satu tempat yang sama.'}
+              {t('budget.sharedAssetsSubtitle')}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
@@ -255,7 +340,7 @@ export const BudgetScreen = ({ navigation }) => {
           <Text style={styles.emptyIcon}>🎯</Text>
           <Text style={styles.emptyText}>{t('budget.noBudgets')}</Text>
           <Text style={styles.emptySubtext}>{t('budget.setLimits')}</Text>
-          <Button title={t('budget.addBudget')} onPress={() => setShowAddModal(true)} style={styles.emptyBtn} fullWidth={false} />
+          <Button title={t('budget.addBudget')} onPress={openAddBudgetModal} style={styles.emptyBtn} fullWidth={false} />
         </View>
       ) : (
         <FlatList
@@ -263,7 +348,7 @@ export const BudgetScreen = ({ navigation }) => {
           keyExtractor={(budget) => budget.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <TouchableOpacity onLongPress={() => handleDelete(item.id)}>
+            <TouchableOpacity onPress={() => openEditBudgetModal(item)} onLongPress={() => handleDelete(item.id)}>
               <BudgetCard budget={item} />
             </TouchableOpacity>
           )}
@@ -275,8 +360,10 @@ export const BudgetScreen = ({ navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('budget.addBudgetTitle')}</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
+              <Text style={styles.modalTitle}>
+                {editingBudget ? t('budget.editBudgetTitle') : t('budget.addBudgetTitle')}
+              </Text>
+              <TouchableOpacity onPress={resetBudgetForm}>
                 <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
@@ -290,9 +377,9 @@ export const BudgetScreen = ({ navigation }) => {
                     style={[
                       styles.catItem,
                       selectedCategory?.id === category.id && styles.catItemSelected,
-
                     ]}
-                    onPress={() => setSelectedCategory(category)}
+                    onPress={() => !editingBudget && setSelectedCategory(category)}
+                    disabled={Boolean(editingBudget)}
                   >
                     <Text style={styles.catIcon}>{category.icon}</Text>
                     <Text style={styles.catName} numberOfLines={2}>
@@ -313,8 +400,81 @@ export const BudgetScreen = ({ navigation }) => {
                 prefix="Rp"
               />
 
-              <Button title={t('budget.setBudget')} onPress={handleAdd} loading={loading} />
+              <Text style={styles.modalLabel}>{t('budget.selectWallet')}</Text>
+              {walletOptions.length > 0 ? (
+                <TouchableOpacity style={styles.selector} onPress={() => setShowWalletModal(true)}>
+                  {selectedWallet ? (
+                    <View style={styles.selectedWallet}>
+                      <Ionicons name="wallet-outline" size={18} color={colors.primary} />
+                      <Text style={styles.selectedWalletName} numberOfLines={1}>{selectedWallet.name}</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.selectorPlaceholder} numberOfLines={1}>{t('budget.selectWallet')}</Text>
+                  )}
+                  <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.emptyWalletCard}>
+                  <View style={styles.emptyWalletTextWrap}>
+                    <Text style={styles.emptyWalletTitle}>{t('budget.noWalletTitle')}</Text>
+                    <Text style={styles.emptyWalletSubtitle}>{t('budget.noWalletSubtitle')}</Text>
+                  </View>
+                  <Button
+                    title={t('budget.createWallet')}
+                    onPress={() => navigation.navigate('Wallets')}
+                    fullWidth={false}
+                    size="sm"
+                  />
+                </View>
+              )}
+
+              <Button
+                title={editingBudget ? t('budget.updateBudget') : t('budget.setBudget')}
+                onPress={handleSubmitBudget}
+                loading={loading}
+              />
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showWalletModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('budget.selectWallet')}</Text>
+              <TouchableOpacity onPress={() => setShowWalletModal(false)}>
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={walletOptions}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.walletList}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.walletItem,
+                    selectedWallet?.id === item.id && styles.walletItemSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedWallet(item);
+                    setShowWalletModal(false);
+                  }}
+                >
+                  <View style={styles.walletItemIcon}>
+                    <Ionicons name="wallet-outline" size={18} color={colors.primary} />
+                  </View>
+                  <View style={styles.walletItemInfo}>
+                    <Text style={styles.walletItemName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.walletItemBalance} numberOfLines={1}>
+                      {formatCurrency(item.balance || 0, 'IDR', language)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            />
           </View>
         </View>
       </Modal>
@@ -322,7 +482,7 @@ export const BudgetScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isCompact, categoryColumns }) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
@@ -354,7 +514,12 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: colors.border,
     ...SHADOWS.sm,
   },
-  overallInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.sm },
+  overallInfo: {
+    flexDirection: isCompact ? 'column' : 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+    gap: isCompact ? SPACING.xs : SPACING.sm,
+  },
   overallLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
   overallValues: { fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
   overallSub: { color: colors.textMuted, fontWeight: FONT_WEIGHT.regular, fontFamily: FONT_FAMILY.regular },
@@ -412,7 +577,7 @@ const createStyles = (colors) => StyleSheet.create({
     borderTopLeftRadius: BORDER_RADIUS.xl,
     borderTopRightRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,
-    maxHeight: '90%',
+    maxHeight: '92%',
   },
   modalScrollContent: {
     paddingBottom: SPACING.lg,
@@ -425,6 +590,35 @@ const createStyles = (colors) => StyleSheet.create({
   },
   modalTitle: { fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
   modalLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, marginBottom: SPACING.sm, fontWeight: '500', fontFamily: FONT_FAMILY.medium },
+  selector: {
+    minHeight: 54,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    paddingHorizontal: SPACING.md,
+    marginBottom: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectedWallet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    flex: 1,
+  },
+  selectedWalletName: {
+    color: colors.textPrimary,
+    fontSize: FONT_SIZE.md,
+    fontFamily: FONT_FAMILY.medium,
+    flex: 1,
+  },
+  selectorPlaceholder: {
+    color: colors.textMuted,
+    fontSize: FONT_SIZE.md,
+    fontFamily: FONT_FAMILY.regular,
+  },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: SPACING.lg },
   catItem: {
     alignItems: 'center',
@@ -434,12 +628,85 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
-    width: '31%',
+    width: categoryColumns === 2 ? '48%' : '31%',
     minHeight: 92,
   },
   catItemSelected: { borderColor: colors.primary, backgroundColor: `${colors.primary}20` },
   catIcon: { fontSize: 22, marginBottom: 4 },
   catName: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, textAlign: 'center' },
+  emptyWalletCard: {
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+    gap: SPACING.md,
+  },
+  emptyWalletTextWrap: {
+    gap: 4,
+  },
+  emptyWalletTitle: {
+    color: colors.textPrimary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.semibold,
+  },
+  emptyWalletSubtitle: {
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.regular,
+    lineHeight: 20,
+  },
+  walletList: {
+    paddingBottom: SPACING.md,
+  },
+  walletItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    backgroundColor: colors.background,
+  },
+  walletItemSelected: {
+    borderColor: colors.primary,
+    backgroundColor: `${colors.primary}12`,
+  },
+  walletItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${colors.primary}15`,
+  },
+  walletItemInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  walletItemName: {
+    color: colors.textPrimary,
+    fontSize: FONT_SIZE.md,
+    fontFamily: FONT_FAMILY.semibold,
+  },
+  walletItemBalance: {
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.regular,
+    marginTop: 2,
+  },
 });
+
+const normalizeBudgetWalletId = (walletId) => walletId || null;
+const getBudgetWalletKey = (categoryId, walletId) =>
+  `${categoryId || 'uncategorized'}::${normalizeBudgetWalletId(walletId) || 'all'}`;
+const getBudgetSubject = (t, categoryName, walletName) => (
+  walletName
+    ? t('budget.subjectWithWallet', { category: categoryName, wallet: walletName })
+    : t('budget.subjectDefault', { category: categoryName })
+);
 
 export default BudgetScreen;

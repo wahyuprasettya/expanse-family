@@ -2,7 +2,7 @@
 // Budget Card Component
 // ============================================================
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING, SHADOWS } from '@constants/theme';
 import { formatCurrency } from '@utils/formatters';
 import { calcBudgetUsage, getBudgetStatus } from '@utils/calculations';
@@ -10,9 +10,11 @@ import { useAppTheme } from '@hooks/useAppTheme';
 import { useTranslation } from '@hooks/useTranslation';
 
 export const BudgetCard = ({ budget }) => {
+  const { width } = useWindowDimensions();
+  const isCompact = width < 380;
   const { colors } = useAppTheme();
-  const { language } = useTranslation();
-  const styles = createStyles(colors);
+  const { language, t } = useTranslation();
+  const styles = createStyles(colors, { isCompact });
   const percentage = budget.usagePercentage ?? calcBudgetUsage(budget.spent || 0, budget.amount);
   const status = budget.status || getBudgetStatus(percentage);
   const isExceeded = status === 'exceeded';
@@ -24,46 +26,28 @@ export const BudgetCard = ({ budget }) => {
       ? colors.warning
       : colors.secondary;
   const remaining = budget.amount - budget.spent;
-  const statusLabel = budget.statusLabel || (
-    language === 'en'
-      ? isExceeded
-        ? 'Exceeded'
-        : isCritical
-          ? 'Almost gone'
-          : isWarning
-            ? 'Warning'
-            : 'Safe'
-      : isExceeded
-        ? 'Terlampaui'
-        : isCritical
-          ? 'Hampir habis'
-          : isWarning
-            ? 'Waspada'
-            : 'Aman'
-  );
-  const periodLabel = language === 'en'
-    ? budget.period === 'monthly'
-      ? 'Monthly limit'
-      : 'Weekly limit'
-    : budget.period === 'monthly'
-      ? 'Limit bulanan'
-      : 'Limit mingguan';
+  const statusLabel = budget.statusLabel || getBudgetStatusLabel(status, t);
+  const periodLabel = budget.period === 'monthly'
+    ? t('budget.periodMonthly')
+    : t('budget.periodWeekly');
+  const walletDisplayName = budget.walletDisplayName || budget.walletName || t('budget.allFundingSources');
   const insightText = budget.message || (
     isExceeded
-      ? (language === 'en'
-          ? `Budget exceeded by ${formatCurrency(Math.abs(remaining), 'IDR', language)}`
-          : `Budget melewati ${formatCurrency(Math.abs(remaining), 'IDR', language)}`)
+      ? t('budget.exceededBy', {
+          amount: formatCurrency(Math.abs(remaining), 'IDR', language),
+        })
       : isCritical
-        ? (language === 'en'
-            ? `${budget.categoryName} budget is almost gone`
-            : `Budget ${budget.categoryName} hampir habis`)
+        ? t('budget.messageCritical', {
+            subject: getBudgetSubject(t, budget.categoryName, walletDisplayName),
+          })
         : isWarning
-          ? (language === 'en'
-              ? `${budget.categoryName} budget is already used ${percentage}%`
-              : `Budget ${budget.categoryName} sudah terpakai ${percentage}%`)
-          : (language === 'en'
-              ? `${formatCurrency(remaining, 'IDR', language)} remaining`
-              : `Sisa ${formatCurrency(remaining, 'IDR', language)}`)
+          ? t('budget.messageWarning', {
+              subject: getBudgetSubject(t, budget.categoryName, walletDisplayName),
+              percent: percentage,
+            })
+          : t('budget.remainingText', {
+              amount: formatCurrency(remaining, 'IDR', language),
+            })
   );
 
   return (
@@ -71,16 +55,26 @@ export const BudgetCard = ({ budget }) => {
       <View style={styles.header}>
         <View style={styles.categoryInfo}>
           <Text style={styles.icon}>{budget.categoryIcon || '📦'}</Text>
-          <View>
-            <Text style={styles.categoryName}>{budget.categoryName}</Text>
+          <View style={styles.categoryText}>
+            <Text style={styles.categoryName} numberOfLines={2}>{budget.categoryName}</Text>
             <Text style={styles.period}>{periodLabel}</Text>
+            <Text style={styles.walletText} numberOfLines={2}>
+              {t('budget.fundingSource')}: {walletDisplayName}
+            </Text>
           </View>
         </View>
         <View style={styles.amounts}>
-          <Text style={[styles.spentText, { color: statusColor }]}>
+          <Text
+            style={[styles.spentText, { color: statusColor }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
             {formatCurrency(budget.spent, 'IDR', language)}
           </Text>
-          <Text style={styles.limitText}>/ {formatCurrency(budget.amount, 'IDR', language)}</Text>
+          <Text style={styles.limitText} numberOfLines={1}>
+            / {formatCurrency(budget.amount, 'IDR', language)}
+          </Text>
         </View>
       </View>
 
@@ -103,14 +97,14 @@ export const BudgetCard = ({ budget }) => {
         <View style={[styles.statusPill, { backgroundColor: `${statusColor}18` }]}>
           <Text style={[styles.statusPillText, { color: statusColor }]}>{statusLabel}</Text>
         </View>
-        <Text style={styles.remainingText}>
+        <Text style={styles.remainingText} numberOfLines={2}>
           {isExceeded
-            ? (language === 'en'
-                ? `Exceeded ${formatCurrency(Math.abs(remaining), 'IDR', language)}`
-                : `Lewat ${formatCurrency(Math.abs(remaining), 'IDR', language)}`)
-            : (language === 'en'
-                ? `${formatCurrency(remaining, 'IDR', language)} left`
-                : `Sisa ${formatCurrency(remaining, 'IDR', language)}`)}
+            ? t('budget.exceededText', {
+                amount: formatCurrency(Math.abs(remaining), 'IDR', language),
+              })
+            : t('budget.remainingText', {
+                amount: formatCurrency(remaining, 'IDR', language),
+              })}
         </Text>
       </View>
 
@@ -121,7 +115,7 @@ export const BudgetCard = ({ budget }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isCompact }) => StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.lg,
@@ -132,12 +126,23 @@ const createStyles = (colors) => StyleSheet.create({
     ...SHADOWS.sm,
   },
   header: {
-    flexDirection: 'row',
+    flexDirection: isCompact ? 'column' : 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: isCompact ? 'flex-start' : 'center',
     marginBottom: SPACING.md,
+    gap: isCompact ? SPACING.sm : SPACING.md,
   },
-  categoryInfo: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  categoryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    flex: 1,
+    minWidth: 0,
+  },
+  categoryText: {
+    flex: 1,
+    minWidth: 0,
+  },
   icon: { fontSize: 24, marginRight: 8 },
   categoryName: {
     color: colors.textPrimary,
@@ -146,7 +151,17 @@ const createStyles = (colors) => StyleSheet.create({
     fontFamily: FONT_FAMILY.semibold,
   },
   period: { color: colors.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2, fontFamily: FONT_FAMILY.regular },
-  amounts: { alignItems: 'flex-end' },
+  walletText: {
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.xs,
+    marginTop: 4,
+    fontFamily: FONT_FAMILY.medium,
+  },
+  amounts: {
+    alignItems: isCompact ? 'flex-start' : 'flex-end',
+    alignSelf: isCompact ? 'stretch' : 'auto',
+    minWidth: isCompact ? 0 : 110,
+  },
   spentText: { fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
   limitText: { color: colors.textMuted, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
   progressContainer: {
@@ -174,8 +189,8 @@ const createStyles = (colors) => StyleSheet.create({
     textAlign: 'right',
   },
   statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: isCompact ? 'column' : 'row',
+    alignItems: isCompact ? 'flex-start' : 'center',
     justifyContent: 'space-between',
     marginTop: 4,
     marginBottom: SPACING.sm,
@@ -199,9 +214,23 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.textMuted,
     fontSize: FONT_SIZE.sm,
     fontFamily: FONT_FAMILY.regular,
-    flex: 1,
-    textAlign: 'right',
+    flex: isCompact ? 0 : 1,
+    textAlign: isCompact ? 'left' : 'right',
+    alignSelf: isCompact ? 'stretch' : 'auto',
   },
 });
+
+const getBudgetStatusLabel = (status, t) => {
+  if (status === 'exceeded') return t('budget.statusExceeded');
+  if (status === 'critical') return t('budget.statusCritical');
+  if (status === 'warning') return t('budget.statusWarning');
+  return t('budget.statusSafe');
+};
+
+const getBudgetSubject = (t, categoryName, walletName) => (
+  walletName && walletName !== t('budget.allFundingSources')
+    ? t('budget.subjectWithWallet', { category: categoryName, wallet: walletName })
+    : t('budget.subjectDefault', { category: categoryName })
+);
 
 export default BudgetCard;

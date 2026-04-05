@@ -7,6 +7,7 @@ import { startOfMonth, endOfMonth, subMonths, isWithinInterval } from 'date-fns'
 import { selectTransactions } from '@store/transactionSlice';
 import { selectCategories } from '@store/categorySlice';
 import { selectBudgets } from '@store/budgetSlice';
+import { selectWallets } from '@store/walletSlice';
 import {
   buildMonthlyExpenseData,
   calcSavingsRate,
@@ -23,18 +24,11 @@ import { useTranslation } from '@hooks/useTranslation';
 const LARGE_TRANSACTION_THRESHOLD = 1000000;
 const SIGNIFICANT_SPIKE_THRESHOLD = 25;
 
-const getBudgetStatusLabel = (status, language) => {
-  if (language === 'en') {
-    if (status === 'exceeded') return 'Exceeded';
-    if (status === 'critical') return 'Almost gone';
-    if (status === 'warning') return 'Warning';
-    return 'Safe';
-  }
-
-  if (status === 'exceeded') return 'Terlampaui';
-  if (status === 'critical') return 'Hampir habis';
-  if (status === 'warning') return 'Waspada';
-  return 'Aman';
+const getBudgetStatusLabel = (status, t) => {
+  if (status === 'exceeded') return t('budget.statusExceeded');
+  if (status === 'critical') return t('budget.statusCritical');
+  if (status === 'warning') return t('budget.statusWarning');
+  return t('budget.statusSafe');
 };
 
 export const useInsights = () => {
@@ -42,6 +36,7 @@ export const useInsights = () => {
   const transactions = useSelector(selectTransactions);
   const categories = useSelector(selectCategories);
   const budgets = useSelector(selectBudgets);
+  const wallets = useSelector(selectWallets);
 
   const insights = useMemo(() => {
     const now = new Date();
@@ -53,6 +48,7 @@ export const useInsights = () => {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
     const categoryMap = new Map(categories.map((category) => [category.id, category]));
+    const walletMap = new Map(wallets.map((wallet) => [wallet.id, wallet]));
 
     const getCategoryDisplayName = (transactionOrCategory = {}) => {
       const category = categoryMap.get(transactionOrCategory.categoryId || transactionOrCategory.id);
@@ -253,31 +249,33 @@ export const useInsights = () => {
       accumulator[category.categoryId] = category.total;
       return accumulator;
     }, {});
+    const categoryWalletExpenseMap = thisMonthExpenses.reduce((accumulator, transaction) => {
+      const key = getBudgetWalletKey(transaction.categoryId, transaction.walletId);
+      accumulator[key] = (accumulator[key] || 0) + transaction.amount;
+      return accumulator;
+    }, {});
 
     const budgetInsights = budgetItems
       .map((budget) => {
-        const spent = categoryExpenseMap[budget.categoryId] || 0;
+        const resolvedWalletName = walletMap.get(budget.walletId)?.name || budget.walletName || null;
+        const spent = budget.walletId
+          ? (categoryWalletExpenseMap[getBudgetWalletKey(budget.categoryId, budget.walletId)] || 0)
+          : (categoryExpenseMap[budget.categoryId] || 0);
         const usagePercentage = calcBudgetUsage(spent, budget.amount);
         const status = getBudgetStatus(usagePercentage);
-        const statusLabel = getBudgetStatusLabel(status, language);
-        let message = language === 'en'
-          ? `${budget.categoryName} budget is still safe`
-          : `Budget ${budget.categoryName} kamu masih aman`;
+        const statusLabel = getBudgetStatusLabel(status, t);
+        const categoryName = getCategoryDisplayName({ id: budget.categoryId, categoryName: budget.categoryName });
+        const budgetLabel = getBudgetInsightLabel(t, categoryName, resolvedWalletName);
+        let message = t('budget.messageSafe', { subject: budgetLabel });
 
         if (status === 'warning') {
-          message = language === 'en'
-            ? `${budget.categoryName} budget is already used ${usagePercentage}%, be careful`
-            : `Budget ${budget.categoryName} kamu sudah terpakai ${usagePercentage}%, hati-hati ya!`;
+          message = t('budget.messageWarning', { subject: budgetLabel, percent: usagePercentage });
         }
         if (status === 'critical') {
-          message = language === 'en'
-            ? `${budget.categoryName} budget is almost gone`
-            : `Budget ${budget.categoryName} hampir habis`;
+          message = t('budget.messageCritical', { subject: budgetLabel });
         }
         if (status === 'exceeded') {
-          message = language === 'en'
-            ? `${budget.categoryName} budget has been exceeded`
-            : `Budget ${budget.categoryName} sudah terlampaui`;
+          message = t('budget.messageExceeded', { subject: budgetLabel });
         }
 
         return {
@@ -287,7 +285,9 @@ export const useInsights = () => {
           status,
           statusLabel,
           remaining: budget.amount - spent,
-          categoryName: getCategoryDisplayName({ id: budget.categoryId, categoryName: budget.categoryName }),
+          categoryName,
+          walletName: resolvedWalletName,
+          walletDisplayName: resolvedWalletName || t('budget.allFundingSources'),
           message,
         };
       })
@@ -365,9 +365,18 @@ export const useInsights = () => {
       thisMonthIncome,
       savingsRate: calcSavingsRate(thisMonthIncome, thisMonthTotal),
     };
-  }, [budgets, categories, language, t, transactions]);
+  }, [budgets, categories, language, t, transactions, wallets]);
 
   return insights;
 };
 
 export default useInsights;
+
+const normalizeBudgetWalletId = (walletId) => walletId || null;
+const getBudgetWalletKey = (categoryId, walletId) =>
+  `${categoryId || 'uncategorized'}::${normalizeBudgetWalletId(walletId) || 'all'}`;
+const getBudgetInsightLabel = (t, categoryName, walletName) => (
+  walletName
+    ? t('budget.subjectWithWallet', { category: categoryName, wallet: walletName })
+    : t('budget.subjectDefault', { category: categoryName })
+);
