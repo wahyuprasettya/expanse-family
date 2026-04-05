@@ -2,7 +2,7 @@
 // Notifications Screen
 // ============================================================
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
@@ -16,8 +16,12 @@ import LoadingState from '@components/common/LoadingState';
 import { getNotificationNavigationTarget } from '@navigation/notificationNavigation';
 
 export const NotificationsScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const isCompact = width < 380;
+  const isTablet = width >= 768;
+  const isLargeTablet = width >= 1100;
   const { colors } = useAppTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, { isCompact, isTablet, isLargeTablet });
   const { t } = useTranslation();
   const user = useSelector(selectUser);
   const notifications = useSelector(selectAppNotifications);
@@ -184,10 +188,22 @@ export const NotificationsScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isCompact, isTablet, isLargeTablet }) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.lg, paddingBottom: SPACING.md },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: SPACING.sm },
+  header: {
+    width: '100%',
+    maxWidth: isLargeTablet ? 1120 : isTablet ? 980 : '100%',
+    alignSelf: 'center',
+    paddingHorizontal: isTablet ? SPACING.xl : SPACING.lg,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.md,
+  },
+  headerTop: {
+    flexDirection: isCompact ? 'column' : 'row',
+    justifyContent: 'space-between',
+    alignItems: isCompact ? 'stretch' : 'flex-start',
+    gap: SPACING.sm,
+  },
   headerInfo: { flex: 1, paddingRight: SPACING.sm },
   title: { color: colors.textPrimary, fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold },
   subtitle: { color: colors.textMuted, marginTop: 4, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
@@ -204,10 +220,24 @@ const createStyles = (colors) => StyleSheet.create({
     borderColor: `${colors.expense}25`,
   },
   clearAllText: { color: colors.expense, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.semibold },
-  list: { padding: SPACING.lg },
-  card: { backgroundColor: colors.surface, borderRadius: BORDER_RADIUS.lg, padding: SPACING.md, marginBottom: SPACING.sm, borderWidth: 1, borderColor: colors.border, ...SHADOWS.sm },
+  list: {
+    paddingHorizontal: isTablet ? SPACING.xl : SPACING.lg,
+    paddingVertical: SPACING.lg,
+  },
+  card: {
+    width: '100%',
+    maxWidth: isLargeTablet ? 1120 : isTablet ? 980 : '100%',
+    alignSelf: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...SHADOWS.sm,
+  },
   cardUnread: { borderColor: colors.primary },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: SPACING.sm },
   actionsWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconBtn: {
     width: 32,
@@ -231,9 +261,21 @@ const createStyles = (colors) => StyleSheet.create({
   body: { color: colors.textSecondary, marginTop: 4, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular, lineHeight: 20 },
   expandBtn: { marginTop: 8, alignSelf: 'flex-start' },
   expandText: { color: colors.primary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.semibold },
-  footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, gap: 8 },
+  footerRow: {
+    flexDirection: isCompact ? 'column' : 'row',
+    justifyContent: 'space-between',
+    alignItems: isCompact ? 'flex-start' : 'center',
+    marginTop: 10,
+    gap: 8,
+  },
   meta: { color: colors.textMuted, marginTop: 8, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
-  empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40, fontFamily: FONT_FAMILY.regular },
+  empty: {
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: 40,
+    fontFamily: FONT_FAMILY.regular,
+    paddingHorizontal: SPACING.lg,
+  },
 });
 
 export default NotificationsScreen;

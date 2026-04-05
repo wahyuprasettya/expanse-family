@@ -37,9 +37,9 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
   const fullAmount = formatCurrency(transaction.amount, 'IDR', language);
   const compactAmount = formatCurrencyCompact(transaction.amount, 'IDR', language);
   const showCompactAmount = isLargeTransaction && compactAmount !== fullAmount;
-  const addedByText = language === 'en'
-    ? `By ${transaction.createdByName || ''}`
-    : `Oleh ${transaction.createdByName || ''}`;
+  const addedByText = transaction.createdByName
+    ? t('transactionCard.addedBy', { name: transaction.createdByName })
+    : null;
   const debtSubtitle = transaction.debtMeta?.creditorName
     ? t('transactionCard.debtTo', { name: transaction.debtMeta.creditorName })
     : transaction.debtMeta?.dueDate
@@ -120,7 +120,7 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
             {isLargeTransaction ? (
               <View style={[styles.largeBadge, { backgroundColor: `${colors.warning}18` }]}>
                 <Text style={[styles.largeBadgeText, { color: colors.warning }]}>
-                  {language === 'en' ? 'Large' : 'Besar'}
+                  {t('transactionCard.largeBadge')}
                 </Text>
               </View>
             ) : null}

@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Alert, Modal, TextInput, ScrollView
+  Alert, Modal, TextInput, ScrollView, useWindowDimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,11 +23,15 @@ import { useTranslation } from '@hooks/useTranslation';
 // Available icons for category picker
 const ICON_OPTIONS = ['🏠','🍔','🚗','🎬','💊','📚','✈️','🛍️','👕','💆','🎁','💼','💻','📈','🏢','🏘️','🎉','💰','📦','🐾','⚽','🎵','🍷','☕','🏋️','🌿','💡','🔧'];
 export const CategoriesScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const isLargeTablet = width >= 1100;
+  const numColumns = isLargeTablet ? 5 : isTablet ? 4 : 3;
   const user = useSelector(selectUser);
   const categories = useSelector(selectCategories);
   const categoriesLoading = useSelector(selectCategoriesLoading);
   const { colors } = useAppTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, { isTablet, isLargeTablet });
   const { t } = useTranslation();
   const COLOR_OPTIONS = colors.chart;
   const [showAddModal, setShowAddModal] = useState(false);
@@ -127,7 +131,8 @@ export const CategoriesScreen = ({ navigation }) => {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        numColumns={3}
+        key={`categories-${numColumns}`}
+        numColumns={numColumns}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
@@ -258,25 +263,36 @@ export const CategoriesScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isTablet, isLargeTablet }) => StyleSheet.create({
   safe: { flex: 1 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
+    paddingHorizontal: isTablet ? SPACING.xl : SPACING.lg, paddingVertical: SPACING.md,
   },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold },
   addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   typeToggle: {
-    flexDirection: 'row', margin: SPACING.lg,
+    flexDirection: 'row',
+    marginHorizontal: isTablet ? SPACING.xl : SPACING.lg,
+    marginVertical: SPACING.lg,
     borderRadius: BORDER_RADIUS.lg,
     padding: 4, borderWidth: 1,
+    width: '100%',
+    maxWidth: isLargeTablet ? 1120 : isTablet ? 980 : '100%',
+    alignSelf: 'center',
   },
   typeBtn: { flex: 1, paddingVertical: 10, borderRadius: BORDER_RADIUS.md, alignItems: 'center' },
   typeBtnActive: { },
   typeBtnText: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   typeBtnTextActive: { },
-  list: { paddingHorizontal: SPACING.md, paddingBottom: SPACING.xxl },
+  list: {
+    paddingHorizontal: isTablet ? SPACING.xl : SPACING.md,
+    paddingBottom: SPACING.xxl,
+    width: '100%',
+    maxWidth: isLargeTablet ? 1120 : isTablet ? 980 : '100%',
+    alignSelf: 'center',
+  },
   categoryCard: {
     flex: 1, margin: 6, alignItems: 'center', padding: SPACING.md,
     borderRadius: BORDER_RADIUS.xl,
@@ -298,6 +314,9 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: BORDER_RADIUS.xl,
     borderTopRightRadius: BORDER_RADIUS.xl, padding: SPACING.lg, maxHeight: '90%',
+    width: '100%',
+    maxWidth: isTablet ? 720 : '100%',
+    alignSelf: 'center',
   },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.lg },
   modalTitle: { fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.bold },

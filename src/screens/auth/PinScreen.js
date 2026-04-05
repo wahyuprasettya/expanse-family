@@ -3,7 +3,7 @@
 // ============================================================
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Alert, Animated
+  View, Text, StyleSheet, TouchableOpacity, Alert, Animated, useWindowDimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,10 +19,17 @@ const PIN_LENGTH = 6;
 
 export const PinScreen = ({ mode = 'verify' }) => {
   // mode: 'verify' | 'setup' | 'setup-confirm'
+  const { width } = useWindowDimensions();
+  const isCompact = width < 360;
+  const isTablet = width >= 768;
   const dispatch = useDispatch();
   const { t } = useTranslation();
   const { colors } = useAppTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, {
+    isCompact,
+    isTablet,
+    keypadWidth: Math.min(isTablet ? 360 : 320, width - (isCompact ? 40 : 56)),
+  });
   const [pin, setPin] = useState('');
   const [firstPin, setFirstPin] = useState('');
   const [currentMode, setCurrentMode] = useState(mode);
@@ -183,9 +190,17 @@ export const PinScreen = ({ mode = 'verify' }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isCompact, isTablet, keypadWidth }) => StyleSheet.create({
   container: { flex: 1 },
-  inner: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.xl },
+  inner: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: isCompact ? SPACING.lg : SPACING.xl,
+    width: '100%',
+    maxWidth: isTablet ? 560 : '100%',
+    alignSelf: 'center',
+  },
   iconContainer: {
     width: 80, height: 80,
     borderRadius: BORDER_RADIUS.xl,
@@ -202,7 +217,14 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.textPrimary,
     marginBottom: 8,
   },
-  subtitle: { color: colors.textSecondary, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.regular, marginBottom: SPACING.xl },
+  subtitle: {
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.md,
+    fontFamily: FONT_FAMILY.regular,
+    marginBottom: SPACING.xl,
+    textAlign: 'center',
+    paddingHorizontal: SPACING.sm,
+  },
   dotsContainer: {
     flexDirection: 'row',
     marginBottom: SPACING.md,
@@ -220,13 +242,13 @@ const createStyles = (colors) => StyleSheet.create({
   keypad: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    width: 280,
+    width: keypadWidth,
     justifyContent: 'center',
     marginTop: SPACING.lg,
     gap: 12,
   },
   key: {
-    width: 76, height: 76,
+    width: isCompact ? 68 : isTablet ? 88 : 76, height: isCompact ? 68 : isTablet ? 88 : 76,
     borderRadius: BORDER_RADIUS.full,
     backgroundColor: colors.surface,
     alignItems: 'center', justifyContent: 'center',

@@ -5,7 +5,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from '@hooks/useTranslation';
 import {
   addTransaction as addTxService,
+  archiveTransactionsBeforeDate as archiveTransactionsBeforeDateService,
+  deleteArchivedTransactionsBeforeDate as deleteArchivedTransactionsBeforeDateService,
   deleteTransaction as deleteTxService,
+  restoreArchivedTransactionsBeforeDate as restoreArchivedTransactionsBeforeDateService,
   updateTransaction as updateTxService,
 } from '@services/firebase/transactions';
 import {
@@ -397,7 +400,44 @@ export const useTransactions = () => {
     return { error };
   };
 
-  return { transactions, filteredTransactions, balance, addTransaction, updateTransaction, deleteTransaction };
+  const archiveTransactionsBeforeDate = async (cutoffDate) => {
+    if (!user?.uid || !accountId) return { archivedCount: 0, error: 'Not authenticated' };
+
+    return archiveTransactionsBeforeDateService(accountId, cutoffDate, user);
+  };
+
+  const restoreArchivedTransactionsBeforeDate = async (cutoffDate) => {
+    if (!user?.uid || !accountId) return { restoredCount: 0, error: 'Not authenticated' };
+
+    return restoreArchivedTransactionsBeforeDateService(accountId, cutoffDate);
+  };
+
+  const deleteArchivedTransactionsBeforeDate = async (cutoffDate) => {
+    if (!user?.uid || !accountId) return { deletedCount: 0, deletedIds: [], error: 'Not authenticated' };
+
+    const result = await deleteArchivedTransactionsBeforeDateService(accountId, cutoffDate);
+    if (result.error || !Array.isArray(result.deletedIds) || result.deletedIds.length === 0) {
+      return result;
+    }
+
+    await Promise.allSettled(
+      result.deletedIds.map((transactionId) => deleteRemindersByTransactionId(transactionId))
+    );
+
+    return result;
+  };
+
+  return {
+    transactions,
+    filteredTransactions,
+    balance,
+    addTransaction,
+    updateTransaction,
+    deleteTransaction,
+    archiveTransactionsBeforeDate,
+    restoreArchivedTransactionsBeforeDate,
+    deleteArchivedTransactionsBeforeDate,
+  };
 };
 
 const formatCurrency = (amount, language) =>

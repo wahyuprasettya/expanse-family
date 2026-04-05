@@ -58,6 +58,7 @@ export const WalletsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
 
   const walletStats = useMemo(() => {
+    const fallbackOwnerName = user?.displayName || user?.email || t('profile.fallbackUser');
     const counts = transactions.reduce((accumulator, transaction) => {
       const walletIds = transaction.type === 'transfer'
         ? [
@@ -75,8 +76,13 @@ export const WalletsScreen = ({ navigation }) => {
     return wallets.map((wallet) => ({
       ...wallet,
       transactionCount: counts[wallet.id] || 0,
+      ownerLabel: wallet.ownerName
+        || (wallet.ownerUid === user?.uid ? fallbackOwnerName : null)
+        || (wallet.userId === user?.uid ? fallbackOwnerName : null)
+        || (wallet.userId === accountId && accountId !== user?.uid ? t('wallets.sharedOwner') : null)
+        || t('wallets.ownerUnknown'),
     }));
-  }, [transactions, wallets]);
+  }, [accountId, t, transactions, user?.displayName, user?.email, user?.uid, wallets]);
 
   const resetForm = () => {
     setForm(createInitialWalletForm());
@@ -132,7 +138,11 @@ export const WalletsScreen = ({ navigation }) => {
       return;
     }
 
-    const { id, error } = await addWallet(accountId, payload);
+    const { id, error } = await addWallet(accountId, {
+      ...payload,
+      ownerUid: user?.uid || accountId,
+      ownerName: user?.displayName || user?.email || t('profile.fallbackUser'),
+    });
     setLoading(false);
     if (error || !id) {
       Alert.alert(t('common.error'), error || t('common.error'));
@@ -222,6 +232,9 @@ export const WalletsScreen = ({ navigation }) => {
                       <Text style={styles.walletName} numberOfLines={2}>{item.name}</Text>
                       <Text style={styles.walletMeta} numberOfLines={2}>
                         {t('wallets.txCount', { count: item.transactionCount })}
+                      </Text>
+                      <Text style={styles.walletOwner} numberOfLines={1}>
+                        {t('wallets.ownedBy', { name: item.ownerLabel })}
                       </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -358,6 +371,7 @@ const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => StyleShee
   walletInfo: { flex: 1, minWidth: 0 },
   walletName: { color: colors.textPrimary, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.semibold },
   walletMeta: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 2 },
+  walletOwner: { color: colors.primary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.medium, marginTop: 4 },
   walletFooter: {
     marginTop: SPACING.md,
     paddingTop: SPACING.md,

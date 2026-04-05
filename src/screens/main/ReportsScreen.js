@@ -331,10 +331,6 @@ export const ReportsScreen = () => {
         income: report.income,
         expense: report.expense,
         balance: report.balance,
-        assets: assetRows,
-        totalAssetValue,
-        totalAssetCost,
-        totalAssetProfit,
       }, `transactions_${selectedYear}_${selectedMonth}`, language);
       return;
     }
@@ -343,10 +339,6 @@ export const ReportsScreen = () => {
       income: report.income,
       expense: report.expense,
       balance: report.balance,
-      assets: assetRows,
-      totalAssetValue,
-      totalAssetCost,
-      totalAssetProfit,
     }, `report_${selectedYear}_${selectedMonth}`, language);
   };
 

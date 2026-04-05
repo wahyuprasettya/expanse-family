@@ -55,6 +55,9 @@ Each income or expense entry.
   "date":          "Timestamp (transaction date chosen by user)",
   "receiptUrl":    "string | null (Firebase Storage URL)",
   "tags":          "string[] (optional labels)",
+  "archivedAt":    "Timestamp | null (manual archive marker for old history)",
+  "archivedByUid": "string | null",
+  "archivedByName":"string | null",
   "createdAt":     "Timestamp (server)",
   "updatedAt":     "Timestamp (server)"
 }
@@ -205,11 +208,14 @@ Funding sources used by transactions, such as cash, bank accounts, and e-wallets
 
 ```json
 {
-  "userId":     "string",
-  "name":       "string",
-  "balance":    "number",
-  "createdAt":  "Timestamp",
-  "updatedAt":  "Timestamp"
+  "userId":      "string (active household/account owner for list queries)",
+  "householdId": "string (same value as active account id)",
+  "ownerUid":    "string (wallet owner / creator UID)",
+  "ownerName":   "string (snapshot display name of the owner)",
+  "name":        "string",
+  "balance":     "number",
+  "createdAt":   "Timestamp",
+  "updatedAt":   "Timestamp"
 }
 ```
 

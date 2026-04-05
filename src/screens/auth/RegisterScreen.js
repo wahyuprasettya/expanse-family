@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TouchableOpacity, Alert, ImageBackground
+  Platform, TouchableOpacity, Alert, ImageBackground, useWindowDimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDispatch } from 'react-redux';
@@ -20,10 +20,12 @@ import { getFirebaseAuthErrorMessage } from '@utils/firebaseError';
 const authBackground = require('../../../assets/bg.jpeg');
 
 export const RegisterScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
   const dispatch = useDispatch();
   const { t } = useTranslation();
   const { colors, isDark } = useAppTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, { isTablet });
   const [form, setForm] = useState({ displayName: '', email: '', password: '', confirmPassword: '' });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -143,7 +145,7 @@ export const RegisterScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isTablet }) => StyleSheet.create({
   container: { flex: 1 },
   backgroundImage: {
     resizeMode: 'cover',
@@ -152,7 +154,13 @@ const createStyles = (colors) => StyleSheet.create({
   },
   backdrop: { flex: 1 },
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingTop: 60, paddingBottom: SPACING.xl, justifyContent: 'center' },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: isTablet ? SPACING.xl : SPACING.lg,
+    paddingTop: 60,
+    paddingBottom: SPACING.xl,
+    justifyContent: 'center',
+  },
   orbTop: {
     position: 'absolute',
     top: -60,
@@ -171,12 +179,15 @@ const createStyles = (colors) => StyleSheet.create({
     borderRadius: 999,
     backgroundColor: `${colors.secondary}1f`,
   },
-  header: { marginBottom: SPACING.xl },
+  header: { width: '100%', maxWidth: isTablet ? 560 : '100%', alignSelf: 'center', marginBottom: SPACING.xl },
   backBtn: { marginBottom: SPACING.lg },
   backText: { color: colors.textPrimary, fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
   title: { fontSize: FONT_SIZE.xxl, fontFamily: FONT_FAMILY.extrabold, color: colors.textPrimary },
   subtitle: { color: colors.textSecondary, fontSize: FONT_SIZE.md, marginTop: 4, fontFamily: FONT_FAMILY.regular },
   form: {
+    width: '100%',
+    maxWidth: isTablet ? 560 : '100%',
+    alignSelf: 'center',
     backgroundColor: `${colors.surface}d9`,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,

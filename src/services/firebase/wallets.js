@@ -25,6 +25,9 @@ export const addWallet = async (userId, walletData) => {
   try {
     const payload = {
       userId,
+      householdId: userId,
+      ownerUid: walletData.ownerUid || userId,
+      ownerName: walletData.ownerName || 'Member',
       name: walletData.name,
       balance: walletData.balance,
       createdAt: serverTimestamp(),

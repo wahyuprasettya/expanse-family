@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Alert, Modal, Switch
+  Alert, Modal, Switch, useWindowDimensions, ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,9 +25,13 @@ import { useTranslation } from '@hooks/useTranslation';
 
 export const RemindersScreen = ({ navigation }) => {
   const dispatch = useDispatch();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 380;
+  const isTablet = width >= 768;
+  const isLargeTablet = width >= 1100;
   const { colors } = useAppTheme();
   const { t, language } = useTranslation();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, { isCompact, isTablet, isLargeTablet });
   const user = useSelector(selectUser);
   const profile = useSelector(selectProfile);
   const reminders = useSelector(selectReminders);
@@ -139,10 +143,12 @@ export const RemindersScreen = ({ navigation }) => {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <LinearGradient colors={colors.gradients.header} style={styles.header}>
-          <Text style={styles.title}>{t('reminders.title')}</Text>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
-            <Ionicons name="add" size={24} color={colors.primary} />
-          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.title}>{t('reminders.title')}</Text>
+            <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
+              <Ionicons name="add" size={24} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
         </LinearGradient>
         <LoadingState />
       </SafeAreaView>
@@ -152,10 +158,12 @@ export const RemindersScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <LinearGradient colors={colors.gradients.header} style={styles.header}>
-        <Text style={styles.title}>{t('reminders.title')}</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
-          <Ionicons name="add" size={24} color={colors.primary} />
-        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>{t('reminders.title')}</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
+            <Ionicons name="add" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       {reminders.length === 0 ? (
@@ -204,6 +212,7 @@ export const RemindersScreen = ({ navigation }) => {
       <Modal visible={showAddModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScrollContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('reminders.newReminder')}</Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
@@ -243,6 +252,7 @@ export const RemindersScreen = ({ navigation }) => {
             </View>
 
             <Button title={t('reminders.addReminder')} onPress={handleAdd} loading={loading} style={{ marginTop: SPACING.md }} />
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -250,22 +260,30 @@ export const RemindersScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isCompact, isTablet, isLargeTablet }) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
+    paddingHorizontal: isTablet ? SPACING.xl : SPACING.lg, paddingVertical: SPACING.md,
+  },
+  headerContent: {
+    width: '100%',
+    maxWidth: isLargeTablet ? 1120 : isTablet ? 980 : '100%',
+    alignSelf: 'center',
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
   },
   title: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
   addBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: `${colors.primary}20`, alignItems: 'center', justifyContent: 'center' },
-  list: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
+  list: { paddingHorizontal: isTablet ? SPACING.xl : SPACING.lg, paddingVertical: SPACING.md },
   reminderCard: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    width: '100%',
+    maxWidth: isLargeTablet ? 1120 : isTablet ? 980 : '100%',
+    alignSelf: 'center',
+    flexDirection: isCompact ? 'column' : 'row', justifyContent: 'space-between', alignItems: isCompact ? 'stretch' : 'center',
     backgroundColor: colors.surface, borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md, marginBottom: SPACING.sm,
     borderWidth: 1, borderColor: colors.border, ...SHADOWS.sm,
   },
-  reminderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  reminderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 },
   reminderIcon: {
     width: 44, height: 44, borderRadius: BORDER_RADIUS.md,
     backgroundColor: `${colors.primary}20`, alignItems: 'center', justifyContent: 'center', marginRight: SPACING.md,
@@ -273,7 +291,7 @@ const createStyles = (colors) => StyleSheet.create({
   reminderName: { color: colors.textPrimary, fontWeight: FONT_WEIGHT.semibold, fontFamily: FONT_FAMILY.semibold, fontSize: FONT_SIZE.md },
   reminderCategory: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
   reminderDate: { color: colors.textSecondary, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 2 },
-  reminderRight: { alignItems: 'flex-end' },
+  reminderRight: { alignItems: isCompact ? 'flex-start' : 'flex-end', marginTop: isCompact ? SPACING.sm : 0 },
   reminderAmount: { color: colors.expense, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, fontSize: FONT_SIZE.md },
   dueStatus: { fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 2 },
   recurringBadge: {
@@ -282,7 +300,7 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: 6, paddingVertical: 2, marginTop: 4,
   },
   recurringText: { color: colors.primary, fontSize: 9, fontFamily: FONT_FAMILY.regular },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.xl },
   emptyIcon: { fontSize: 60, marginBottom: SPACING.md },
   emptyText: { fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
   emptySubtext: { color: colors.textMuted, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.regular, marginBottom: SPACING.lg, textAlign: 'center' },
@@ -292,7 +310,11 @@ const createStyles = (colors) => StyleSheet.create({
   modalContent: {
     backgroundColor: colors.surface, borderTopLeftRadius: BORDER_RADIUS.xl,
     borderTopRightRadius: BORDER_RADIUS.xl, padding: SPACING.lg, maxHeight: '92%',
+    width: '100%',
+    maxWidth: isTablet ? 720 : '100%',
+    alignSelf: 'center',
   },
+  modalScrollContent: { paddingBottom: SPACING.md },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.lg },
   modalTitle: { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary },
   dueRow: { marginBottom: SPACING.md },

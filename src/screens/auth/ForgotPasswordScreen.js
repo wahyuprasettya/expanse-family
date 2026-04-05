@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TouchableOpacity, Alert
+  Platform, TouchableOpacity, Alert, useWindowDimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { resetPassword } from '@services/firebase/auth';
@@ -16,9 +16,11 @@ import { useAppTheme } from '@hooks/useAppTheme';
 import { getFirebaseAuthErrorMessage } from '@utils/firebaseError';
 
 export const ForgotPasswordScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
   const { t } = useTranslation();
   const { colors } = useAppTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, { isTablet });
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -104,11 +106,17 @@ export const ForgotPasswordScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isTablet }) => StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, paddingHorizontal: SPACING.lg, paddingTop: 60 },
-  header: { alignItems: 'center', marginBottom: SPACING.xxl },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: isTablet ? SPACING.xl : SPACING.lg,
+    paddingTop: 60,
+    paddingBottom: SPACING.xl,
+    justifyContent: 'center',
+  },
+  header: { width: '100%', maxWidth: isTablet ? 520 : '100%', alignSelf: 'center', alignItems: 'center', marginBottom: SPACING.xxl },
   logoContainer: {
     width: 80, height: 80,
     borderRadius: BORDER_RADIUS.xl,
@@ -135,6 +143,9 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: SPACING.md,
   },
   form: {
+    width: '100%',
+    maxWidth: isTablet ? 520 : '100%',
+    alignSelf: 'center',
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,

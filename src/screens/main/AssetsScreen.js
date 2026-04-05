@@ -19,6 +19,7 @@ import { selectProfile, selectUser } from '@store/authSlice';
 import LoadingState from '@components/common/LoadingState';
 import { formatRupiahInput, parseAmount } from '@utils/formatters';
 import { fetchGoldPricePerGramInIdr } from '@services/market/gold';
+import { exportAssetsToCSV, exportAssetsToPDF } from '@services/export';
 
 const ASSET_TYPES = ['gold', 'cash', 'property', 'vehicle', 'crypto', 'other'];
 const GRAM_UNITS = ['g', 'gr', 'gram', 'grams'];
@@ -71,6 +72,7 @@ export const AssetsScreen = ({ navigation }) => {
   const styles = createStyles(colors, { isCompact, isNarrow, isTablet });
   const accountId = profile?.householdId || user?.uid;
   const [showAddModal, setShowAddModal] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState(null);
   const [goldMarket, setGoldMarket] = useState({
     isLoading: false,
     pricePerGramIdr: null,
@@ -313,6 +315,21 @@ export const AssetsScreen = ({ navigation }) => {
     setShowAddModal(true);
   };
 
+  const handleExportAssets = async (format) => {
+    if (assetRows.length === 0 || exportingFormat) return;
+
+    setExportingFormat(format);
+    const filename = `assets_${new Date().getFullYear()}_${new Date().getMonth() + 1}`;
+    const result = format === 'csv'
+      ? await exportAssetsToCSV(assetRows, filename, language)
+      : await exportAssetsToPDF(assetRows, filename, language);
+    setExportingFormat(null);
+
+    if (result.error) {
+      Alert.alert(t('common.error'), result.error);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <LinearGradient colors={colors.gradients.header} style={styles.header}>
@@ -418,14 +435,34 @@ export const AssetsScreen = ({ navigation }) => {
         </LinearGradient>
 
         <View style={styles.sectionRow}>
-          <View>
+          <View style={styles.sectionInfo}>
             <Text style={styles.sectionTitle}>{t('assets.myAssets')}</Text>
             <Text style={styles.sectionCaption}>
               {assetRows.length > 0
-                ? (language === 'en' ? `${assetRows.length} assets tracked` : `${assetRows.length} aset tercatat`)
+                ? t('assets.trackedCount', { count: assetRows.length })
                 : t('assets.emptySubtitle')}
             </Text>
           </View>
+          {assetRows.length > 0 ? (
+            <View style={styles.exportBtns}>
+              <TouchableOpacity
+                style={[styles.exportBtn, exportingFormat === 'csv' && styles.exportBtnDisabled]}
+                onPress={() => handleExportAssets('csv')}
+                disabled={Boolean(exportingFormat)}
+              >
+                <Ionicons name="download-outline" size={16} color={colors.primary} />
+                <Text style={styles.exportBtnText}>CSV</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.exportBtn, exportingFormat === 'pdf' && styles.exportBtnDisabled]}
+                onPress={() => handleExportAssets('pdf')}
+                disabled={Boolean(exportingFormat)}
+              >
+                <Ionicons name="document-outline" size={16} color={colors.primary} />
+                <Text style={styles.exportBtnText}>PDF</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
         {assetRows.length === 0 ? (
@@ -792,7 +829,39 @@ const createStyles = (colors, { isCompact, isNarrow, isTablet }) => StyleSheet.c
   liveMarketMeta: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 4 },
   sectionTitle: { color: colors.textPrimary, fontSize: FONT_SIZE.lg, fontFamily: FONT_FAMILY.semibold },
   sectionCaption: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 4 },
-  sectionRow: { marginTop: SPACING.xs, marginBottom: SPACING.md },
+  sectionInfo: { flex: 1, minWidth: 0 },
+  sectionRow: {
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.md,
+    flexDirection: isCompact ? 'column' : 'row',
+    alignItems: isCompact ? 'flex-start' : 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+  },
+  exportBtns: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  exportBtnDisabled: {
+    opacity: 0.5,
+  },
+  exportBtnText: {
+    color: colors.primary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.medium,
+  },
   emptyState: {
     alignItems: 'center',
     paddingVertical: SPACING.xl,

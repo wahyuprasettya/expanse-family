@@ -1,9 +1,9 @@
 // ============================================================
 // Household Screen
 // ============================================================
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View
+  Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,31 +13,73 @@ import Input from '@components/common/Input';
 import Button from '@components/common/Button';
 import { selectProfile, selectUser, setProfile } from '@store/authSlice';
 import { useAppTheme } from '@hooks/useAppTheme';
-import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SHADOWS, SPACING } from '@constants/theme';
-import { getUserProfileByShareCode, joinSharedHousehold } from '@services/firebase/users';
+import { BORDER_RADIUS, FONT_SIZE, FONT_FAMILY, SHADOWS, SPACING } from '@constants/theme';
+import {
+  disconnectSharedHousehold,
+  getHouseholdMembers,
+  getUserProfileByShareCode,
+  joinSharedHousehold,
+} from '@services/firebase/users';
 import { registerForPushNotifications } from '@services/firebase/notifications';
+import { useTranslation } from '@hooks/useTranslation';
 
 export const HouseholdScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const isCompact = width < 380;
+  const isNarrow = width < 350;
   const dispatch = useDispatch();
+  const { t } = useTranslation();
   const { colors } = useAppTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, { isCompact, isNarrow });
   const user = useSelector(selectUser);
   const profile = useSelector(selectProfile);
   const [joinCode, setJoinCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [members, setMembers] = useState([]);
 
   const isOwner = (profile?.householdRole || 'owner') === 'owner';
   const isPartner = profile?.householdRole === 'partner';
   const shareCode = profile?.shareCode || '-';
+  const otherMembers = members.filter((member) => member.uid !== user?.uid);
+  const isSharedConnected = isPartner || otherMembers.length > 0;
+  const disconnectActionKey = isPartner
+    ? 'householdScreen.disconnectPartnerAction'
+    : 'householdScreen.disconnectOwnerAction';
+  const disconnectActionLabel = t(disconnectActionKey);
+  const resolvedDisconnectActionLabel = disconnectActionLabel === disconnectActionKey
+    ? (isPartner ? 'Keluar dari akun bersama' : 'Putuskan koneksi partner')
+    : disconnectActionLabel;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMembers = async () => {
+      if (!profile?.householdId) {
+        if (!cancelled) setMembers([]);
+        return;
+      }
+
+      const { members: fetchedMembers } = await getHouseholdMembers(profile.householdId);
+      if (!cancelled) {
+        setMembers(fetchedMembers);
+      }
+    };
+
+    loadMembers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.householdId]);
 
   const handleJoin = async () => {
     if (!user?.uid) return;
     if (!joinCode.trim()) {
-      Alert.alert('Error', 'Masukkan kode pasangan terlebih dahulu.');
+      Alert.alert(t('common.error'), t('householdScreen.errors.codeRequired'));
       return;
     }
     if (joinCode.trim().toUpperCase() === shareCode) {
-      Alert.alert('Error', 'Anda tidak bisa memakai kode akun sendiri.');
+      Alert.alert(t('common.error'), t('householdScreen.errors.ownCode'));
       return;
     }
 
@@ -45,7 +87,7 @@ export const HouseholdScreen = ({ navigation }) => {
     const { profile: ownerProfile, error: findError } = await getUserProfileByShareCode(joinCode);
     if (findError || !ownerProfile) {
       setLoading(false);
-      Alert.alert('Error', findError || 'Kode pasangan tidak ditemukan.');
+      Alert.alert(t('common.error'), findError || t('householdScreen.errors.notFound'));
       return;
     }
 
@@ -56,7 +98,7 @@ export const HouseholdScreen = ({ navigation }) => {
     setLoading(false);
 
     if (error) {
-      Alert.alert('Error', error);
+      Alert.alert(t('common.error'), error);
       return;
     }
 
@@ -69,7 +111,55 @@ export const HouseholdScreen = ({ navigation }) => {
     await registerForPushNotifications(user.uid);
 
     setJoinCode('');
-    Alert.alert('Berhasil', 'Akun berhasil terhubung ke pengeluaran bersama.');
+    Alert.alert(t('common.success'), t('householdScreen.successConnected'));
+  };
+
+  const handleDisconnect = () => {
+    if (!user?.uid || !profile?.householdId) return;
+
+    Alert.alert(
+      t('householdScreen.disconnectTitle'),
+      t(isPartner ? 'householdScreen.disconnectPartnerMessage' : 'householdScreen.disconnectOwnerMessage'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: resolvedDisconnectActionLabel,
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            const result = await disconnectSharedHousehold({
+              userId: user.uid,
+              profile,
+            });
+            setLoading(false);
+
+            if (result.error) {
+              Alert.alert(t('common.error'), result.error);
+              return;
+            }
+
+            if (result.selfProfileUpdates) {
+              dispatch(setProfile({
+                ...profile,
+                ...result.selfProfileUpdates,
+              }));
+              setMembers([]);
+            } else if (!isPartner) {
+              setMembers((previous) => previous.filter((member) => member.uid === user.uid));
+            }
+
+            Alert.alert(
+              t('common.success'),
+              t('householdScreen.disconnectSuccess', {
+                members: result.detachedCount,
+                transactions: result.movedTransactionCount,
+                wallets: result.movedWalletCount,
+              })
+            );
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -78,67 +168,86 @@ export const HouseholdScreen = ({ navigation }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Akun Bersama</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>{t('householdScreen.title')}</Text>
         <View style={styles.backBtn} />
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Pengeluaran Suami Istri</Text>
+          <Text style={styles.heroTitle}>{t('householdScreen.heroTitle')}</Text>
           <Text style={styles.heroSubtitle}>
-            Hubungkan akun pasangan agar transaksi yang ditambahkan istri langsung masuk ke dompet keluarga yang sama.
+            {t('householdScreen.heroSubtitle')}
           </Text>
         </View>
 
         {isOwner ? (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Kode Pasangan Anda</Text>
-            <Text style={styles.codeValue} selectable>{shareCode}</Text>
+            <Text style={styles.sectionTitle}>{t('householdScreen.yourCode')}</Text>
+            <Text style={styles.codeValue} selectable numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{shareCode}</Text>
             <Text style={styles.sectionHint}>
-              Bagikan kode ini ke istri Anda. Setelah ia memasukkan kode ini, transaksi dan aset kalian akan masuk ke rumah tangga yang sama.
+              {t('householdScreen.yourCodeHint')}
             </Text>
           </View>
         ) : null}
 
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Status Rumah Tangga</Text>
+          <Text style={styles.sectionTitle}>{t('householdScreen.statusTitle')}</Text>
           <View style={styles.statusRow}>
-            <Text style={styles.statusLabel}>Peran</Text>
-            <Text style={styles.statusValue}>{isOwner ? 'Owner' : 'Partner'}</Text>
+            <Text style={styles.statusLabel}>{t('householdScreen.roleLabel')}</Text>
+            <Text style={styles.statusValue}>{isOwner ? t('householdScreen.roleOwner') : t('householdScreen.rolePartner')}</Text>
           </View>
           <View style={styles.statusRow}>
-            <Text style={styles.statusLabel}>Nama Rumah Tangga</Text>
+            <Text style={styles.statusLabel}>{t('householdScreen.householdNameLabel')}</Text>
             <Text style={styles.statusValue}>{profile?.householdName || profile?.displayName || '-'}</Text>
           </View>
           <View style={styles.statusRow}>
-            <Text style={styles.statusLabel}>Household ID</Text>
+            <Text style={styles.statusLabel}>{t('householdScreen.householdIdLabel')}</Text>
             <Text style={styles.statusValue}>{profile?.householdId || user?.uid || '-'}</Text>
           </View>
         </View>
 
-        {!isPartner ? (
+        {!isSharedConnected ? (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Gabung dengan Kode Pasangan</Text>
+            <Text style={styles.sectionTitle}>{t('householdScreen.joinTitle')}</Text>
             <Input
-              label="Kode pasangan"
+              label={t('householdScreen.joinCodeLabel')}
               value={joinCode}
               onChangeText={setJoinCode}
-              placeholder="Contoh: A1B2C3"
+              placeholder={t('householdScreen.joinCodePlaceholder')}
               autoCapitalize="characters"
               icon="people-outline"
             />
             <Button
-              title="Hubungkan Akun"
+              title={t('householdScreen.connectAction')}
               onPress={handleJoin}
               loading={loading}
             />
           </View>
         ) : (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Akun Sudah Terhubung</Text>
+            <Text style={styles.sectionTitle}>{t('householdScreen.connectedTitle')}</Text>
             <Text style={styles.sectionHint}>
-              Akun ini sudah tergabung ke rumah tangga bersama. Tampilan share code disembunyikan di akun partner.
+              {t(isPartner ? 'householdScreen.connectedHint' : 'householdScreen.ownerConnectedHint', {
+                count: otherMembers.length,
+              })}
             </Text>
+            {otherMembers.length > 0 ? (
+              <View style={styles.memberList}>
+                {otherMembers.map((member) => (
+                  <View key={member.uid} style={styles.memberChip}>
+                    <Ionicons name="person-outline" size={14} color={colors.primary} />
+                    <Text style={styles.memberChipText} numberOfLines={1}>{member.displayName}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <Button
+              title={resolvedDisconnectActionLabel}
+              onPress={handleDisconnect}
+              loading={loading}
+              variant="destructive"
+              style={styles.disconnectBtn}
+            />
           </View>
         )}
       </ScrollView>
@@ -146,7 +255,7 @@ export const HouseholdScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isCompact, isNarrow }) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
@@ -165,6 +274,9 @@ const createStyles = (colors) => StyleSheet.create({
     color: colors.textPrimary,
     fontSize: FONT_SIZE.lg,
     fontFamily: FONT_FAMILY.bold,
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: SPACING.sm,
   },
   content: {
     padding: SPACING.lg,
@@ -181,7 +293,6 @@ const createStyles = (colors) => StyleSheet.create({
   heroTitle: {
     color: colors.textPrimary,
     fontSize: FONT_SIZE.xl,
-    fontWeight: FONT_WEIGHT.bold,
     fontFamily: FONT_FAMILY.bold,
   },
   heroSubtitle: {
@@ -202,16 +313,14 @@ const createStyles = (colors) => StyleSheet.create({
   sectionTitle: {
     color: colors.textPrimary,
     fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.semibold,
     fontFamily: FONT_FAMILY.semibold,
     marginBottom: SPACING.sm,
   },
   codeValue: {
     color: colors.primary,
-    fontSize: FONT_SIZE.xxxl,
-    fontWeight: FONT_WEIGHT.extrabold,
+    fontSize: isNarrow ? FONT_SIZE.xxl : FONT_SIZE.xxxl,
     fontFamily: FONT_FAMILY.extrabold,
-    letterSpacing: 3,
+    letterSpacing: isNarrow ? 1.5 : 3,
     marginBottom: SPACING.sm,
   },
   sectionHint: {
@@ -221,11 +330,13 @@ const createStyles = (colors) => StyleSheet.create({
     lineHeight: 20,
   },
   statusRow: {
-    flexDirection: 'row',
+    flexDirection: isCompact ? 'column' : 'row',
     justifyContent: 'space-between',
+    alignItems: isCompact ? 'flex-start' : 'center',
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    gap: isCompact ? 4 : SPACING.sm,
   },
   statusLabel: {
     color: colors.textMuted,
@@ -235,10 +346,37 @@ const createStyles = (colors) => StyleSheet.create({
   statusValue: {
     color: colors.textPrimary,
     fontSize: FONT_SIZE.sm,
-    fontWeight: FONT_WEIGHT.semibold,
     fontFamily: FONT_FAMILY.semibold,
-    maxWidth: '58%',
-    textAlign: 'right',
+    maxWidth: isCompact ? '100%' : '58%',
+    textAlign: isCompact ? 'left' : 'right',
+    flexShrink: 1,
+  },
+  memberList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  memberChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: `${colors.primary}12`,
+    borderWidth: 1,
+    borderColor: `${colors.primary}22`,
+    maxWidth: '100%',
+  },
+  memberChipText: {
+    color: colors.primary,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.medium,
+    flexShrink: 1,
+  },
+  disconnectBtn: {
+    marginTop: SPACING.md,
   },
 });
 

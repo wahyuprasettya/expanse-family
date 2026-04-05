@@ -31,14 +31,39 @@ const getUserCollectionData = async (collectionName, userId) => {
   );
 };
 
+const writeJsonBackupFile = async (filename, payload, dialogTitle) => {
+  if (!FileSystem.documentDirectory) {
+    throw new Error('Storage directory is not available.');
+  }
+
+  const fileUri = `${FileSystem.documentDirectory}${filename}`;
+  await FileSystem.writeAsStringAsync(
+    fileUri,
+    JSON.stringify(payload, null, 2),
+    {
+      encoding: FileSystem.EncodingType.UTF8,
+    }
+  );
+
+  const shareAvailable = await Sharing.isAvailableAsync();
+  if (shareAvailable) {
+    await Sharing.shareAsync(fileUri, {
+      mimeType: 'application/json',
+      dialogTitle,
+    });
+  }
+
+  return {
+    uri: fileUri,
+    filename,
+    shareAvailable,
+  };
+};
+
 export const exportManualBackupToJSON = async (userId) => {
   try {
     if (!userId) {
       throw new Error('User is not authenticated.');
-    }
-
-    if (!FileSystem.documentDirectory) {
-      throw new Error('Storage directory is not available.');
     }
 
     const allTransactions = await getUserCollectionData('transactions', userId);
@@ -55,7 +80,6 @@ export const exportManualBackupToJSON = async (userId) => {
 
     const createdAt = new Date().toISOString();
     const filename = `backup-${format(new Date(createdAt), 'yyyy-MM-dd')}.json`;
-    const fileUri = `${FileSystem.documentDirectory}${filename}`;
     const backupPayload = {
       version: '1.0',
       createdAt,
@@ -65,28 +89,13 @@ export const exportManualBackupToJSON = async (userId) => {
         wallets,
       },
     };
-
-    await FileSystem.writeAsStringAsync(
-      fileUri,
-      JSON.stringify(backupPayload, null, 2),
-      {
-        encoding: FileSystem.EncodingType.UTF8,
-      }
-    );
-
-    const shareAvailable = await Sharing.isAvailableAsync();
-    if (shareAvailable) {
-      await Sharing.shareAsync(fileUri, {
-        mimeType: 'application/json',
-        dialogTitle: 'Share backup file',
-      });
-    }
+    const exportedFile = await writeJsonBackupFile(filename, backupPayload, 'Share backup file');
 
     return {
-      uri: fileUri,
-      filename,
+      uri: exportedFile.uri,
+      filename: exportedFile.filename,
       createdAt,
-      shareAvailable,
+      shareAvailable: exportedFile.shareAvailable,
       counts: {
         transactions: transactions.length,
         debts: debts.length,
@@ -104,6 +113,55 @@ export const exportManualBackupToJSON = async (userId) => {
         transactions: 0,
         debts: 0,
         wallets: 0,
+      },
+      error: error.message,
+    };
+  }
+};
+
+export const exportTransactionsBackupToJSON = async (
+  transactions = [],
+  {
+    filenamePrefix = 'transactions-archive',
+    title = 'Share archived transactions backup',
+    label = null,
+  } = {}
+) => {
+  try {
+    const createdAt = new Date().toISOString();
+    const normalizedTransactions = sortBackupItems(
+      transactions.map((transaction) => serializeFirestoreValue(transaction))
+    );
+    const filename = `${filenamePrefix}-${format(new Date(createdAt), 'yyyy-MM-dd')}.json`;
+    const payload = {
+      version: '1.0',
+      createdAt,
+      label,
+      count: normalizedTransactions.length,
+      data: {
+        transactions: normalizedTransactions,
+      },
+    };
+    const exportedFile = await writeJsonBackupFile(filename, payload, title);
+
+    return {
+      uri: exportedFile.uri,
+      filename: exportedFile.filename,
+      createdAt,
+      shareAvailable: exportedFile.shareAvailable,
+      counts: {
+        transactions: normalizedTransactions.length,
+      },
+      error: null,
+    };
+  } catch (error) {
+    return {
+      uri: null,
+      filename: null,
+      createdAt: null,
+      shareAvailable: false,
+      counts: {
+        transactions: 0,
       },
       error: error.message,
     };
@@ -304,6 +362,147 @@ export const exportToPDF = async (transactions, summary, filename = 'report', la
       await Sharing.shareAsync(newUri, {
         mimeType: 'application/pdf',
         dialogTitle: language === 'id' ? 'Bagikan Laporan' : 'Share Report',
+      });
+    }
+
+    return { uri: newUri, error: null };
+  } catch (error) {
+    return { uri: null, error: error.message };
+  }
+};
+
+export const exportAssetsToCSV = async (assets = [], filename = 'assets', language = 'id') => {
+  try {
+    const assetsT = translations[language]?.assets || translations.id.assets;
+    const headers = [
+      assetsT.assetName || 'Asset Name',
+      assetsT.assetType || 'Type',
+      assetsT.unit || 'Unit',
+      assetsT.quantity || 'Quantity',
+      assetsT.purchaseValue || 'Value at purchase',
+      assetsT.currentPrice || 'Current price / unit',
+      assetsT.totalValue || 'Total Value',
+      assetsT.profit || 'Profit / Loss',
+    ];
+
+    const rows = assets.map((asset) => [
+      `"${asset.name || ''}"`,
+      translations[language]?.assets?.types?.[asset.type] || asset.type || '',
+      asset.unit || '',
+      asset.qty ?? asset.quantity ?? 0,
+      asset.cost ?? ((Number(asset.buyPrice) || 0) * (Number(asset.qty ?? asset.quantity) || 0)),
+      asset.currentPrice ?? 0,
+      asset.value ?? 0,
+      asset.profit ?? 0,
+    ]);
+
+    const csvContent = [
+      [assetsT.myAssets || 'My Assets'].join(','),
+      headers.join(','),
+      ...rows.map((row) => row.join(',')),
+    ].join('\n');
+
+    const fileUri = `${FileSystem.documentDirectory}${filename}_${Date.now()}.csv`;
+
+    await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(fileUri, {
+        mimeType: 'text/csv',
+        dialogTitle: language === 'id' ? 'Ekspor Aset' : 'Export Assets',
+      });
+    }
+
+    return { uri: fileUri, error: null };
+  } catch (error) {
+    return { uri: null, error: error.message };
+  }
+};
+
+export const exportAssetsToPDF = async (assets = [], filename = 'assets', language = 'id') => {
+  try {
+    const assetsT = translations[language]?.assets || translations.id.assets;
+    const intlLocale = language === 'en' ? 'en-US' : 'id-ID';
+
+    const totalValue = assets.reduce((sum, asset) => sum + (asset.value || 0), 0);
+    const totalCost = assets.reduce((sum, asset) => sum + (asset.cost || 0), 0);
+    const totalProfit = totalValue - totalCost;
+
+    const rows = assets.map((asset) => `
+      <tr>
+        <td>${asset.name || '-'}</td>
+        <td>${translations[language]?.assets?.types?.[asset.type] || asset.type || '-'}</td>
+        <td>${asset.unit || '-'}</td>
+        <td style="text-align:right;">${(asset.qty ?? asset.quantity ?? 0).toLocaleString(intlLocale)}</td>
+        <td style="text-align:right;">Rp ${(asset.cost || 0).toLocaleString(intlLocale)}</td>
+        <td style="text-align:right;">Rp ${(asset.currentPrice || 0).toLocaleString(intlLocale)}</td>
+        <td style="text-align:right;font-weight:bold;">Rp ${(asset.value || 0).toLocaleString(intlLocale)}</td>
+        <td style="text-align:right;color:${(asset.profit || 0) >= 0 ? '#16A34A' : '#DC2626'};">${(asset.profit || 0) >= 0 ? '+' : ''}Rp ${(asset.profit || 0).toLocaleString(intlLocale)}</td>
+      </tr>
+    `).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; color: #1E293B; }
+          h1 { color: #F59E0B; }
+          .summary { display: flex; gap: 20px; margin: 20px 0; }
+          .summary-card { background: #FFFBEB; padding: 15px; border-radius: 8px; flex: 1; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th { background: #F59E0B; color: white; padding: 10px; text-align: left; }
+          td { padding: 8px 10px; border-bottom: 1px solid #E2E8F0; }
+          tr:nth-child(even) { background: #F8FAFC; }
+        </style>
+      </head>
+      <body>
+        <h1>${assetsT.myAssets || 'My Assets'}</h1>
+        <p>${language === 'id' ? 'Dibuat' : 'Generated'}: ${format(new Date(), 'dd MMMM yyyy')}</p>
+        <div class="summary">
+          <div class="summary-card">
+            <strong>${assetsT.totalValue || 'Total Value'}</strong>
+            <p>Rp ${totalValue.toLocaleString(intlLocale)}</p>
+          </div>
+          <div class="summary-card">
+            <strong>${assetsT.totalCost || 'Total Cost'}</strong>
+            <p>Rp ${totalCost.toLocaleString(intlLocale)}</p>
+          </div>
+          <div class="summary-card">
+            <strong>${assetsT.totalGain || 'Total Gain'}</strong>
+            <p style="color:${totalProfit >= 0 ? '#16A34A' : '#DC2626'}">${totalProfit >= 0 ? '+' : ''}Rp ${totalProfit.toLocaleString(intlLocale)}</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>${assetsT.assetName || 'Asset Name'}</th>
+              <th>${assetsT.assetType || 'Type'}</th>
+              <th>${assetsT.unit || 'Unit'}</th>
+              <th>${assetsT.quantity || 'Quantity'}</th>
+              <th>${assetsT.purchaseValue || 'Value at purchase'}</th>
+              <th>${assetsT.currentPrice || 'Current price / unit'}</th>
+              <th>${assetsT.totalValue || 'Total Value'}</th>
+              <th>${assetsT.profit || 'Profit / Loss'}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const { uri } = await Print.printToFileAsync({ html });
+    const newUri = `${FileSystem.documentDirectory}${filename}_${Date.now()}.pdf`;
+    await FileSystem.moveAsync({ from: uri, to: newUri });
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(newUri, {
+        mimeType: 'application/pdf',
+        dialogTitle: language === 'id' ? 'Bagikan Aset' : 'Share Assets',
       });
     }
 

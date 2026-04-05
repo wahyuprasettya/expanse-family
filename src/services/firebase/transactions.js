@@ -16,13 +16,40 @@ import {
   setDoc,
   serverTimestamp,
   Timestamp,
-  limit,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from './config';
 import { logAppNotification } from './appNotifications';
 
 const TRANSACTIONS_COLLECTION = 'transactions';
 const buildTransactionDocId = (accountId, clientRequestId) => `tx_${accountId}_${clientRequestId}`;
+const MAX_BATCH_SIZE = 450;
+
+const serializeTransactionDoc = (transactionDoc) => ({
+  id: transactionDoc.id,
+  ...transactionDoc.data(),
+  date: transactionDoc.data().date?.toDate().toISOString(),
+  createdAt: transactionDoc.data().createdAt?.toDate?.()?.toISOString?.() || null,
+  updatedAt: transactionDoc.data().updatedAt?.toDate?.()?.toISOString?.() || null,
+  archivedAt: transactionDoc.data().archivedAt?.toDate?.()?.toISOString?.() || null,
+});
+
+const buildTransactionsBeforeDateQuery = (accountId, cutoffDate) => query(
+  collection(db, TRANSACTIONS_COLLECTION),
+  where('householdId', '==', accountId),
+  where('date', '<', Timestamp.fromDate(cutoffDate)),
+  orderBy('date', 'desc')
+);
+
+const commitDocumentBatches = async (documents, mutateDoc) => {
+  for (let startIndex = 0; startIndex < documents.length; startIndex += MAX_BATCH_SIZE) {
+    const batch = writeBatch(db);
+    const chunk = documents.slice(startIndex, startIndex + MAX_BATCH_SIZE);
+
+    chunk.forEach((documentSnapshot) => mutateDoc(batch, documentSnapshot));
+    await batch.commit();
+  }
+};
 
 // ─── Add Transaction ─────────────────────────────────────────
 export const addTransaction = async (accountId, actor, transactionData) => {
@@ -157,13 +184,7 @@ export const subscribeToTransactions = (accountId, callback, filters = {}) => {
   }
 
   return onSnapshot(q, (snapshot) => {
-    const transactions = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      date: doc.data().date?.toDate().toISOString(),
-      createdAt: doc.data().createdAt?.toDate?.()?.toISOString?.() || null,
-      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString?.() || null,
-    }));
+    const transactions = snapshot.docs.map(serializeTransactionDoc);
     callback(transactions);
   });
 };
@@ -179,16 +200,84 @@ export const getTransactionsByDateRange = async (accountId, startDate, endDate) 
       orderBy('date', 'desc')
     );
     const snapshot = await getDocs(q);
-    const transactions = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      date: doc.data().date?.toDate(),
-      createdAt: doc.data().createdAt?.toDate?.()?.toISOString?.() || null,
-      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString?.() || null,
+    const transactions = snapshot.docs.map((transactionDoc) => ({
+      ...serializeTransactionDoc(transactionDoc),
+      date: transactionDoc.data().date?.toDate(),
     }));
     return { transactions, error: null };
   } catch (error) {
     return { transactions: [], error: error.message };
+  }
+};
+
+export const archiveTransactionsBeforeDate = async (accountId, cutoffDate, actor = null) => {
+  try {
+    const snapshot = await getDocs(buildTransactionsBeforeDateQuery(accountId, cutoffDate));
+    const targetDocs = snapshot.docs.filter((transactionDoc) => !transactionDoc.data().archivedAt);
+
+    if (targetDocs.length === 0) {
+      return { archivedCount: 0, error: null };
+    }
+
+    await commitDocumentBatches(targetDocs, (batch, transactionDoc) => {
+      batch.update(transactionDoc.ref, {
+        archivedAt: serverTimestamp(),
+        archivedByUid: actor?.uid || null,
+        archivedByName: actor?.displayName || actor?.email || 'Member',
+        updatedAt: serverTimestamp(),
+      });
+    });
+
+    return { archivedCount: targetDocs.length, error: null };
+  } catch (error) {
+    return { archivedCount: 0, error: error.message };
+  }
+};
+
+export const restoreArchivedTransactionsBeforeDate = async (accountId, cutoffDate) => {
+  try {
+    const snapshot = await getDocs(buildTransactionsBeforeDateQuery(accountId, cutoffDate));
+    const targetDocs = snapshot.docs.filter((transactionDoc) => Boolean(transactionDoc.data().archivedAt));
+
+    if (targetDocs.length === 0) {
+      return { restoredCount: 0, error: null };
+    }
+
+    await commitDocumentBatches(targetDocs, (batch, transactionDoc) => {
+      batch.update(transactionDoc.ref, {
+        archivedAt: null,
+        archivedByUid: null,
+        archivedByName: null,
+        updatedAt: serverTimestamp(),
+      });
+    });
+
+    return { restoredCount: targetDocs.length, error: null };
+  } catch (error) {
+    return { restoredCount: 0, error: error.message };
+  }
+};
+
+export const deleteArchivedTransactionsBeforeDate = async (accountId, cutoffDate) => {
+  try {
+    const snapshot = await getDocs(buildTransactionsBeforeDateQuery(accountId, cutoffDate));
+    const targetDocs = snapshot.docs.filter((transactionDoc) => Boolean(transactionDoc.data().archivedAt));
+
+    if (targetDocs.length === 0) {
+      return { deletedCount: 0, deletedIds: [], error: null };
+    }
+
+    await commitDocumentBatches(targetDocs, (batch, transactionDoc) => {
+      batch.delete(transactionDoc.ref);
+    });
+
+    return {
+      deletedCount: targetDocs.length,
+      deletedIds: targetDocs.map((transactionDoc) => transactionDoc.id),
+      error: null,
+    };
+  } catch (error) {
+    return { deletedCount: 0, deletedIds: [], error: error.message };
   }
 };
 

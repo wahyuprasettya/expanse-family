@@ -1,9 +1,9 @@
 // ============================================================
 // Home Screen (Dashboard)
 // ============================================================
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, useWindowDimensions
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, useWindowDimensions, Animated, Easing
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +50,9 @@ export const HomeScreen = ({ navigation }) => {
   const activeNotifications = useSelector(selectUnreadAppNotificationCount);
   const insights = useInsights();
   const { deleteTransaction } = useTransactions();
+  const celestialDrift = useRef(new Animated.Value(0)).current;
+  const celestialPulse = useRef(new Animated.Value(1)).current;
+  const bellShake = useRef(new Animated.Value(0)).current;
   const notificationBadgeLabel = activeNotifications > 99 ? '99+' : String(activeNotifications);
   const getCategoryDisplayName = (category) => {
     if (category?.isDefault && category?.id) {
@@ -94,8 +97,15 @@ export const HomeScreen = ({ navigation }) => {
   const displayBalance = wallets.length > 0 ? totalWalletBalance : balance;
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? t('home.morning') : hour < 17 ? t('home.afternoon') : t('home.evening');
-  const isBrightGreeting = hour >= 5 && hour < 17;
+  const isNightGreeting = hour < 5 || hour >= 18;
+  const greeting = hour < 12
+    ? t('home.morning')
+    : hour < 15
+      ? t('home.afternoon')
+      : hour < 18
+        ? t('home.evening')
+        : t('home.night');
+  const isBrightGreeting = !isNightGreeting;
   const greetingTheme = useMemo(() => {
     if (isBrightGreeting) {
       return {
@@ -131,6 +141,179 @@ export const HomeScreen = ({ navigation }) => {
       emoji: '🌙',
     };
   }, [isBrightGreeting, isDark]);
+  useEffect(() => {
+    let motionLoop;
+    let pulseLoop;
+
+    celestialDrift.stopAnimation();
+    celestialPulse.stopAnimation();
+    celestialDrift.setValue(0);
+    celestialPulse.setValue(1);
+
+    if (isBrightGreeting) {
+      motionLoop = Animated.loop(
+        Animated.timing(celestialDrift, {
+          toValue: 1,
+          duration: 12000,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      );
+      pulseLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(celestialPulse, {
+            toValue: 1.08,
+            duration: 1800,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(celestialPulse, {
+            toValue: 1,
+            duration: 1800,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    } else {
+      motionLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(celestialDrift, {
+            toValue: 1,
+            duration: 2200,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(celestialDrift, {
+            toValue: 0,
+            duration: 2200,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(celestialPulse, {
+            toValue: 1.04,
+            duration: 2000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(celestialPulse, {
+            toValue: 1,
+            duration: 2000,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    }
+
+    motionLoop.start();
+    pulseLoop.start();
+
+    return () => {
+      motionLoop?.stop();
+      pulseLoop?.stop();
+      celestialDrift.stopAnimation();
+      celestialPulse.stopAnimation();
+    };
+  }, [celestialDrift, celestialPulse, isBrightGreeting]);
+
+  useEffect(() => {
+    let bellLoop;
+
+    bellShake.stopAnimation();
+    bellShake.setValue(0);
+
+    if (activeNotifications > 0) {
+      bellLoop = Animated.loop(
+        Animated.sequence([
+          Animated.delay(1600),
+          Animated.timing(bellShake, {
+            toValue: 1,
+            duration: 110,
+            easing: Easing.out(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(bellShake, {
+            toValue: -1,
+            duration: 110,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(bellShake, {
+            toValue: 0.8,
+            duration: 100,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(bellShake, {
+            toValue: -0.5,
+            duration: 100,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(bellShake, {
+            toValue: 0,
+            duration: 120,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.delay(2400),
+        ])
+      );
+
+      bellLoop.start();
+    }
+
+    return () => {
+      bellLoop?.stop();
+      bellShake.stopAnimation();
+      bellShake.setValue(0);
+    };
+  }, [activeNotifications, bellShake]);
+
+  const celestialTransform = isBrightGreeting
+    ? [
+        {
+          rotate: celestialDrift.interpolate({
+            inputRange: [0, 1],
+            outputRange: ['0deg', '360deg'],
+          }),
+        },
+        { scale: celestialPulse },
+      ]
+    : [
+        {
+          translateY: celestialDrift.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [0, -6, 0],
+          }),
+        },
+        {
+          rotate: celestialDrift.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: ['-8deg', '2deg', '-8deg'],
+          }),
+        },
+        { scale: celestialPulse },
+      ];
+  const bellTransform = [
+    {
+      rotate: bellShake.interpolate({
+        inputRange: [-1, 0, 1],
+        outputRange: ['-14deg', '0deg', '14deg'],
+      }),
+    },
+    {
+      translateY: bellShake.interpolate({
+        inputRange: [-1, 0, 1],
+        outputRange: [-1, 0, -1],
+      }),
+    },
+  ];
   const budgetWarningCards = insights.budgetWarnings.slice(0, 3);
   const spendingInsightCards = insights.insightCards || [];
   const featuredInsight = spendingInsightCards[0] || null;
@@ -198,7 +381,9 @@ export const HomeScreen = ({ navigation }) => {
                           },
                         ]}
                       >
-                        <Text style={styles.greetingEmoji}>{greetingTheme.emoji}</Text>
+                        <Animated.View style={[styles.greetingEmojiMotion, { transform: celestialTransform }]}>
+                          <Text style={styles.greetingEmoji}>{greetingTheme.emoji}</Text>
+                        </Animated.View>
                       </View>
                     </View>
                     <View style={styles.greetingActions}>
@@ -208,24 +393,26 @@ export const HomeScreen = ({ navigation }) => {
                           { backgroundColor: greetingTheme.dividerColor },
                         ]}
                       />
-                      <TouchableOpacity
-                        onPress={() => navigation.navigate('Notifications')}
-                        activeOpacity={0.8}
-                        style={[
-                          styles.greetingBellBtn,
-                          {
-                            backgroundColor: greetingTheme.bellBackground,
-                            borderColor: greetingTheme.bellBorder,
-                          },
-                        ]}
-                      >
-                        <Ionicons name="notifications-outline" size={22} color={greetingTheme.bellIcon} />
-                        {activeNotifications > 0 ? (
-                          <View style={styles.badge}>
-                            <Text style={styles.badgeText}>{notificationBadgeLabel}</Text>
-                          </View>
-                        ) : null}
-                      </TouchableOpacity>
+                      <Animated.View style={[styles.greetingBellMotion, { transform: bellTransform }]}>
+                        <TouchableOpacity
+                          onPress={() => navigation.navigate('Notifications')}
+                          activeOpacity={0.8}
+                          style={[
+                            styles.greetingBellBtn,
+                            {
+                              backgroundColor: greetingTheme.bellBackground,
+                              borderColor: greetingTheme.bellBorder,
+                            },
+                          ]}
+                        >
+                          <Ionicons name="notifications-outline" size={22} color={greetingTheme.bellIcon} />
+                          {activeNotifications > 0 ? (
+                            <View style={styles.badge}>
+                              <Text style={styles.badgeText}>{notificationBadgeLabel}</Text>
+                            </View>
+                          ) : null}
+                        </TouchableOpacity>
+                      </Animated.View>
                     </View>
                   </View>
                 </LinearGradient>
@@ -480,8 +667,8 @@ const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => StyleShee
   headerInfo: { width: '100%' },
   greetingCardShell: {
     marginHorizontal: 0,
-    borderTopLeftRadius: BORDER_RADIUS.md,
-    borderTopRightRadius: BORDER_RADIUS.md,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     shadowOffset: { width: 0, height: 16 },
@@ -490,8 +677,8 @@ const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => StyleShee
     elevation: 18,
   },
   greetingCard: {
-    borderTopLeftRadius: BORDER_RADIUS.md,
-    borderTopRightRadius: BORDER_RADIUS.md,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     overflow: 'hidden',
@@ -565,6 +752,10 @@ const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => StyleShee
     borderWidth: 1,
     ...SHADOWS.sm,
   },
+  greetingBellMotion: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   greetingActionDivider: {
     width: 1,
     height: isNarrow ? 22 : isCompact ? 28 : 32,
@@ -572,6 +763,10 @@ const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => StyleShee
     opacity: 0.9,
   },
   greetingEmoji: { fontSize: isNarrow ? 24 : isCompact ? 28 : 34 },
+  greetingEmojiMotion: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerSubtitle: {
     color: colors.textMuted,
     fontSize: isNarrow ? FONT_SIZE.xs : FONT_SIZE.sm,

@@ -2,7 +2,7 @@
 // Insights Screen
 // ============================================================
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,9 +12,12 @@ import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
 
 export const InsightsScreen = ({ navigation }) => {
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const isLargeTablet = width >= 1100;
   const { t } = useTranslation();
   const { colors } = useAppTheme();
-  const styles = createStyles(colors);
+  const styles = createStyles(colors, { isTablet, isLargeTablet });
   const insights = useInsights();
   const insightCards = insights.insightCards || [];
 
@@ -67,10 +70,13 @@ export const InsightsScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors) => StyleSheet.create({
+const createStyles = (colors, { isTablet, isLargeTablet }) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg },
+  header: { paddingHorizontal: isTablet ? SPACING.xl : SPACING.lg, paddingBottom: SPACING.lg },
   headerRow: {
+    width: '100%',
+    maxWidth: isLargeTablet ? 1120 : isTablet ? 980 : '100%',
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
@@ -99,11 +105,15 @@ const createStyles = (colors) => StyleSheet.create({
     marginTop: 2,
   },
   list: {
-    padding: SPACING.lg,
+    paddingHorizontal: isTablet ? SPACING.xl : SPACING.lg,
+    paddingVertical: SPACING.lg,
     paddingTop: SPACING.md,
     flexGrow: 1,
   },
   summaryCard: {
+    width: '100%',
+    maxWidth: isLargeTablet ? 1120 : isTablet ? 980 : '100%',
+    alignSelf: 'center',
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
@@ -124,6 +134,9 @@ const createStyles = (colors) => StyleSheet.create({
     marginTop: 6,
   },
   card: {
+    width: '100%',
+    maxWidth: isLargeTablet ? 1120 : isTablet ? 980 : '100%',
+    alignSelf: 'center',
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
@@ -150,6 +163,7 @@ const createStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: SPACING.xxl,
+    paddingHorizontal: SPACING.xl,
   },
   emptyIcon: { fontSize: 44, marginBottom: SPACING.md },
   emptyTitle: {
