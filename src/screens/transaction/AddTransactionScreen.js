@@ -21,7 +21,8 @@ import { useTranslation } from '@hooks/useTranslation';
 import { parseAmount, formatDate, formatRupiahInput } from '@utils/formatters';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-const TRANSACTION_TYPES = ['expense', 'income', 'debt'];
+const TRANSACTION_TYPES = ['expense', 'income', 'transfer'];
+const TRANSFER_ICON = '🔄';
 
 export const AddTransactionScreen = ({ navigation, route }) => {
   const { width } = useWindowDimensions();
@@ -41,26 +42,21 @@ export const AddTransactionScreen = ({ navigation, route }) => {
 
   const [type, setType] = useState('expense');
   const [amount, setAmount] = useState('');
+  const [adminFee, setAdminFee] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedWallet, setSelectedWallet] = useState(null);
+  const [selectedDestinationWallet, setSelectedDestinationWallet] = useState(null);
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date());
-  const [dueDate, setDueDate] = useState(() => {
-    const nextWeek = new Date();
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    return nextWeek;
-  });
-  const [creditorName, setCreditorName] = useState('');
-  const [remindDaysBefore, setRemindDaysBefore] = useState('3');
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [datePickerTarget, setDatePickerTarget] = useState('transaction');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [walletPickerTarget, setWalletPickerTarget] = useState('source');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const isSubmittingRef = useRef(false);
   const submissionKeyRef = useRef(null);
-  const isDebt = type === 'debt';
+  const isTransfer = type === 'transfer';
 
   const getCategoryDisplayName = (category) => {
     if (category?.isDefault && category?.id) {
@@ -70,76 +66,90 @@ export const AddTransactionScreen = ({ navigation, route }) => {
     return category?.name || '';
   };
 
-  const filteredCategories = useMemo(() => categories.filter((category) => {
-    if (isDebt) return category.type === 'expense' || category.type === 'both' || category.id === 'debt';
-    return category.type === type || category.type === 'both';
-  }), [categories, isDebt, type]);
+  const findWalletOption = (walletId, walletName) => {
+    if (!walletId && !walletName) return null;
+
+    return wallets.find((wallet) => wallet.id === walletId) || {
+      id: walletId || `wallet-${walletName || 'unknown'}`,
+      name: walletName || t('wallets.wallet'),
+      balance: 0,
+    };
+  };
+
+  const filteredCategories = useMemo(() => {
+    if (isTransfer) return [];
+    return categories.filter((category) => category.type === type || category.type === 'both');
+  }, [categories, isTransfer, type]);
+
+  const activeWalletSelection = walletPickerTarget === 'destination'
+    ? selectedDestinationWallet
+    : selectedWallet;
+
+  const walletModalTitle = walletPickerTarget === 'destination'
+    ? t('addTransaction.selectDestinationWallet')
+    : isTransfer
+      ? t('addTransaction.selectSourceWallet')
+      : t('addTransaction.selectWallet');
 
   useEffect(() => {
     const prefill = route?.params?.prefill;
     if (!prefill || isEditMode) return;
 
-    if (prefill.type) {
-      setType(prefill.type);
-      setSelectedCategory((currentCategory) => {
-        if (prefill.type === 'debt') {
-          return categories.find((category) => category.id === 'debt') || currentCategory;
-        }
+    const nextType = prefill.type && TRANSACTION_TYPES.includes(prefill.type) ? prefill.type : 'expense';
+    setType(nextType);
+    setSelectedCategory(null);
+    setSelectedWallet(null);
+    setSelectedDestinationWallet(null);
+    setAdminFee('');
 
-        if (!currentCategory) return null;
-        return currentCategory.type === prefill.type || currentCategory.type === 'both'
-          ? currentCategory
-          : null;
-      });
-    }
     if (prefill.amount) setAmount(formatRupiahInput(prefill.amount));
     if (prefill.description) setDescription(prefill.description);
     if (prefill.date) setDate(new Date(prefill.date));
-    setSelectedWallet(null);
     setErrors({});
-  }, [categories, isEditMode, route?.params?.prefill]);
+  }, [isEditMode, route?.params?.prefill]);
 
   useEffect(() => {
     if (!isEditMode || !editingTransaction) return;
 
-    setType(editingTransaction.type || 'expense');
+    const nextType = TRANSACTION_TYPES.includes(editingTransaction.type)
+      ? editingTransaction.type
+      : 'expense';
+    setType(nextType);
     setAmount(formatRupiahInput(editingTransaction.amount));
     setDescription(editingTransaction.description || '');
     setDate(editingTransaction.date ? new Date(editingTransaction.date) : new Date());
 
-    const nextCategory = categories.find((category) => category.id === editingTransaction.categoryId)
-      || (editingTransaction.categoryId
-        ? {
-            id: editingTransaction.categoryId,
-            name: editingTransaction.category,
-            icon: editingTransaction.categoryIcon || '📦',
-            color: editingTransaction.categoryColor || colors.primary,
-            type: editingTransaction.type,
-            isDefault: false,
-          }
-        : null);
-    setSelectedCategory(nextCategory);
-
-    const nextWallet = wallets.find((wallet) => wallet.id === editingTransaction.walletId)
-      || (editingTransaction.walletId
-        ? {
-            id: editingTransaction.walletId,
-            name: editingTransaction.walletName,
-            balance: 0,
-          }
-        : null);
-    setSelectedWallet(nextWallet);
-
-    if (editingTransaction.type === 'debt') {
-      setCreditorName(editingTransaction.debtMeta?.creditorName || '');
-      setDueDate(editingTransaction.debtMeta?.dueDate ? new Date(editingTransaction.debtMeta.dueDate) : new Date());
-      setRemindDaysBefore(String(editingTransaction.debtMeta?.remindDaysBefore ?? 3));
+    if (nextType === 'transfer') {
+      setSelectedCategory(null);
+      setSelectedWallet(
+        findWalletOption(
+          editingTransaction.transferMeta?.sourceWalletId || editingTransaction.walletId,
+          editingTransaction.transferMeta?.sourceWalletName || editingTransaction.walletName
+        )
+      );
+      setSelectedDestinationWallet(
+        findWalletOption(
+          editingTransaction.transferMeta?.destinationWalletId,
+          editingTransaction.transferMeta?.destinationWalletName
+        )
+      );
+      setAdminFee(formatRupiahInput(String(editingTransaction.transferMeta?.adminFee || '')));
     } else {
-      const nextWeek = new Date();
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      setCreditorName('');
-      setDueDate(nextWeek);
-      setRemindDaysBefore('3');
+      const nextCategory = categories.find((category) => category.id === editingTransaction.categoryId)
+        || (editingTransaction.categoryId
+          ? {
+              id: editingTransaction.categoryId,
+              name: editingTransaction.category,
+              icon: editingTransaction.categoryIcon || '📦',
+              color: editingTransaction.categoryColor || colors.primary,
+              type: editingTransaction.type,
+              isDefault: false,
+            }
+          : null);
+      setSelectedCategory(nextCategory);
+      setSelectedWallet(findWalletOption(editingTransaction.walletId, editingTransaction.walletName));
+      setSelectedDestinationWallet(null);
+      setAdminFee('');
     }
 
     setErrors({});
@@ -148,29 +158,34 @@ export const AddTransactionScreen = ({ navigation, route }) => {
   const validate = () => {
     const newErrors = {};
     if (!amount || parseAmount(amount) <= 0) newErrors.amount = t('addTransaction.amountRequired');
-    if (!selectedCategory) newErrors.category = t('addTransaction.categoryRequired');
-    if (wallets.length > 0 && !selectedWallet) newErrors.wallet = t('addTransaction.walletRequired');
-    if (isDebt) {
-      if (!creditorName.trim()) newErrors.creditorName = t('addTransaction.creditorRequired');
-      if (!dueDate) newErrors.dueDate = t('addTransaction.dueDateRequired');
+
+    if (isTransfer) {
+      if (!selectedWallet) newErrors.wallet = t('addTransaction.sourceWalletRequired');
+      if (!selectedDestinationWallet) newErrors.destinationWallet = t('addTransaction.destinationWalletRequired');
+      if (selectedWallet?.id && selectedDestinationWallet?.id && selectedWallet.id === selectedDestinationWallet.id) {
+        newErrors.destinationWallet = t('addTransaction.walletsMustDiffer');
+      }
+    } else {
+      if (!selectedCategory) newErrors.category = t('addTransaction.categoryRequired');
+      if (wallets.length > 0 && !selectedWallet) newErrors.wallet = t('addTransaction.walletRequired');
     }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleChangeType = (nextType) => {
     setType(nextType);
-    if (nextType === 'debt') {
-      setSelectedCategory(categories.find((category) => category.id === 'debt') || null);
-    } else {
-      setSelectedCategory(null);
-    }
+    setSelectedCategory(null);
+    setSelectedWallet(null);
+    setSelectedDestinationWallet(null);
+    setAdminFee('');
     setErrors({});
   };
 
-  const openDatePicker = (target) => {
-    setDatePickerTarget(target);
-    setShowDatePicker(true);
+  const openWalletPicker = (target) => {
+    setWalletPickerTarget(target);
+    setShowWalletModal(true);
   };
 
   const handleScanReceipt = () => {
@@ -180,36 +195,60 @@ export const AddTransactionScreen = ({ navigation, route }) => {
   const handleSubmit = async () => {
     if (loading || isSubmittingRef.current) return;
     if (!validate()) return;
+
     if (!isEditMode && !submissionKeyRef.current) {
       submissionKeyRef.current = `tx-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     }
+
     isSubmittingRef.current = true;
     setLoading(true);
     let error = null;
+
     try {
-      const payload = {
-        amount: parseAmount(amount),
-        type,
-        category: getCategoryDisplayName(selectedCategory),
-        categoryId: selectedCategory.id,
-        walletId: selectedWallet?.id || null,
-        walletName: selectedWallet?.name || null,
-        categoryIcon: selectedCategory.icon,
-        categoryColor: selectedCategory.color,
-        description: description.trim(),
-        date: date.toISOString(),
-        debtMeta: isDebt ? {
-          creditorName: creditorName.trim(),
-          dueDate: dueDate.toISOString(),
-          remindDaysBefore: parseInt(remindDaysBefore, 10) || 3,
-        } : null,
-      };
+      const payload = isTransfer
+        ? {
+            amount: parseAmount(amount),
+            type,
+            category: 'Transfer',
+            categoryId: null,
+            walletId: selectedWallet?.id || null,
+            walletName: selectedWallet?.name || null,
+            categoryIcon: TRANSFER_ICON,
+            categoryColor: colors.primary,
+            description: description.trim(),
+            date: date.toISOString(),
+            debtMeta: null,
+            transferMeta: {
+              sourceWalletId: selectedWallet?.id || null,
+              sourceWalletName: selectedWallet?.name || null,
+              destinationWalletId: selectedDestinationWallet?.id || null,
+              destinationWalletName: selectedDestinationWallet?.name || null,
+              adminFee: parseAmount(adminFee),
+            },
+          }
+        : {
+            amount: parseAmount(amount),
+            type,
+            category: getCategoryDisplayName(selectedCategory),
+            categoryId: selectedCategory.id,
+            walletId: selectedWallet?.id || null,
+            walletName: selectedWallet?.name || null,
+            categoryIcon: selectedCategory.icon,
+            categoryColor: selectedCategory.color,
+            description: description.trim(),
+            date: date.toISOString(),
+            debtMeta: null,
+            transferMeta: null,
+          };
+
       if (!isEditMode) {
         payload.clientRequestId = submissionKeyRef.current;
       }
+
       const result = isEditMode
         ? await updateTransaction(editingTransactionId, payload)
         : await addTransaction(payload);
+
       error = result?.error || null;
     } finally {
       isSubmittingRef.current = false;
@@ -224,10 +263,16 @@ export const AddTransactionScreen = ({ navigation, route }) => {
     }
   };
 
+  const walletHelperText = isTransfer && wallets.length < 2
+    ? t('addTransaction.transferNeedsTwoWallets')
+    : t('addTransaction.noWalletSubtitle');
+
+  const transferAdminFee = parseAmount(adminFee);
+  const transferSourceDeduction = parseAmount(amount) + transferAdminFee;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-        {/* Header */}
         <LinearGradient colors={colors.gradients.header} style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Ionicons name="close" size={24} color={colors.textPrimary} />
@@ -243,7 +288,6 @@ export const AddTransactionScreen = ({ navigation, route }) => {
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
-          {/* Type Toggle */}
           <View style={styles.typeToggle}>
             {TRANSACTION_TYPES.map((txType) => (
               <TouchableOpacity
@@ -253,32 +297,37 @@ export const AddTransactionScreen = ({ navigation, route }) => {
                   type === txType && {
                     backgroundColor: txType === 'income'
                       ? colors.income
-                      : txType === 'debt'
-                        ? colors.warning
+                      : txType === 'transfer'
+                        ? colors.primary
                         : colors.expense,
                   },
                 ]}
                 onPress={() => handleChangeType(txType)}
               >
                 <Text style={[styles.typeBtnText, type === txType && styles.typeBtnTextActive]}>
-                  {txType === 'expense' ? t('common.expense') : txType === 'income' ? t('common.income') : t('addTransaction.typeDebt')}
+                  {txType === 'expense'
+                    ? t('common.expense')
+                    : txType === 'income'
+                      ? t('common.income')
+                      : t('addTransaction.typeTransfer')}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <TouchableOpacity style={styles.receiptScannerCard} onPress={handleScanReceipt}>
-            <View style={styles.receiptScannerIcon}>
-              <Ionicons name="receipt-outline" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.receiptScannerInfo}>
-              <Text style={styles.receiptScannerTitle}>{t('profile.scanReceipt')}</Text>
-              <Text style={styles.receiptScannerSubtitle}>{t('addTransaction.scanReceiptSubtitle')}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          {!isTransfer ? (
+            <TouchableOpacity style={styles.receiptScannerCard} onPress={handleScanReceipt}>
+              <View style={styles.receiptScannerIcon}>
+                <Ionicons name="receipt-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.receiptScannerInfo}>
+                <Text style={styles.receiptScannerTitle}>{t('profile.scanReceipt')}</Text>
+                <Text style={styles.receiptScannerSubtitle}>{t('addTransaction.scanReceiptSubtitle')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
 
-          {/* Amount */}
           <View style={styles.amountContainer}>
             <Text style={styles.amountLabel}>{t('addTransaction.amount')}</Text>
             <View style={styles.amountInput}>
@@ -296,36 +345,38 @@ export const AddTransactionScreen = ({ navigation, route }) => {
             </View>
           </View>
 
-          {/* Category Picker */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>{t('common.category')}</Text>
-            <TouchableOpacity
-              style={[styles.categorySelector, errors.category && styles.fieldError]}
-              onPress={() => setShowCategoryModal(true)}
-            >
-              {selectedCategory ? (
-                <View style={styles.selectedCategory}>
-                  <Text style={styles.selectedCategoryIcon}>{selectedCategory.icon}</Text>
-                  <Text style={styles.selectedCategoryName} numberOfLines={1}>
-                    {getCategoryDisplayName(selectedCategory)}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.categoryPlaceholder} numberOfLines={1}>{t('addTransaction.selectCategory')}</Text>
-              )}
-              <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-            {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
-          </View>
+          {!isTransfer ? (
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>{t('common.category')}</Text>
+              <TouchableOpacity
+                style={[styles.categorySelector, errors.category && styles.fieldError]}
+                onPress={() => setShowCategoryModal(true)}
+              >
+                {selectedCategory ? (
+                  <View style={styles.selectedCategory}>
+                    <Text style={styles.selectedCategoryIcon}>{selectedCategory.icon}</Text>
+                    <Text style={styles.selectedCategoryName} numberOfLines={1}>
+                      {getCategoryDisplayName(selectedCategory)}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.categoryPlaceholder} numberOfLines={1}>{t('addTransaction.selectCategory')}</Text>
+                )}
+                <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+              {errors.category ? <Text style={styles.errorText}>{errors.category}</Text> : null}
+            </View>
+          ) : null}
 
-          {/* Wallet Picker */}
           <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>{t('addTransaction.selectWallet')}</Text>
+            <Text style={styles.fieldLabel}>
+              {isTransfer ? t('addTransaction.sourceWallet') : t('addTransaction.selectWallet')}
+            </Text>
             {wallets.length > 0 ? (
               <>
                 <TouchableOpacity
                   style={[styles.categorySelector, errors.wallet && styles.fieldError]}
-                  onPress={() => setShowWalletModal(true)}
+                  onPress={() => openWalletPicker('source')}
                 >
                   {selectedWallet ? (
                     <View style={styles.selectedCategory}>
@@ -333,7 +384,9 @@ export const AddTransactionScreen = ({ navigation, route }) => {
                       <Text style={styles.selectedCategoryName} numberOfLines={1}>{selectedWallet.name}</Text>
                     </View>
                   ) : (
-                    <Text style={styles.categoryPlaceholder} numberOfLines={1}>{t('addTransaction.selectWallet')}</Text>
+                    <Text style={styles.categoryPlaceholder} numberOfLines={1}>
+                      {isTransfer ? t('addTransaction.selectSourceWallet') : t('addTransaction.selectWallet')}
+                    </Text>
                   )}
                   <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
                 </TouchableOpacity>
@@ -343,7 +396,7 @@ export const AddTransactionScreen = ({ navigation, route }) => {
               <View style={styles.emptyWalletCard}>
                 <View style={styles.emptyWalletTextWrap}>
                   <Text style={styles.emptyWalletTitle}>{t('addTransaction.noWalletTitle')}</Text>
-                  <Text style={styles.emptyWalletSubtitle}>{t('addTransaction.noWalletSubtitle')}</Text>
+                  <Text style={styles.emptyWalletSubtitle}>{walletHelperText}</Text>
                 </View>
                 <Button
                   title={t('addTransaction.createWallet')}
@@ -355,10 +408,96 @@ export const AddTransactionScreen = ({ navigation, route }) => {
             )}
           </View>
 
-          {/* Date Picker */}
+          {isTransfer ? (
+            <View style={styles.fieldContainer}>
+              <Text style={styles.fieldLabel}>{t('addTransaction.destinationWallet')}</Text>
+              {wallets.length >= 2 ? (
+                <>
+                  <TouchableOpacity
+                    style={[styles.categorySelector, errors.destinationWallet && styles.fieldError]}
+                    onPress={() => openWalletPicker('destination')}
+                  >
+                    {selectedDestinationWallet ? (
+                      <View style={styles.selectedCategory}>
+                        <Ionicons name="swap-horizontal-outline" size={18} color={colors.primary} />
+                        <Text style={styles.selectedCategoryName} numberOfLines={1}>
+                          {selectedDestinationWallet.name}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.categoryPlaceholder} numberOfLines={1}>
+                        {t('addTransaction.selectDestinationWallet')}
+                      </Text>
+                    )}
+                    <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
+                  </TouchableOpacity>
+                  {errors.destinationWallet ? <Text style={styles.errorText}>{errors.destinationWallet}</Text> : null}
+                </>
+              ) : (
+                <View style={styles.emptyWalletCard}>
+                  <View style={styles.emptyWalletTextWrap}>
+                    <Text style={styles.emptyWalletTitle}>{t('addTransaction.noWalletTitle')}</Text>
+                    <Text style={styles.emptyWalletSubtitle}>{t('addTransaction.transferNeedsTwoWallets')}</Text>
+                  </View>
+                  <Button
+                    title={t('addTransaction.createWallet')}
+                    onPress={() => navigation.navigate('Wallets')}
+                    fullWidth={false}
+                    size="sm"
+                  />
+                </View>
+              )}
+            </View>
+          ) : null}
+
+          {isTransfer ? (
+            <>
+              <Input
+                label={t('addTransaction.adminFee')}
+                value={adminFee}
+                onChangeText={setAdminFee}
+                placeholder={t('addTransaction.adminFeePlaceholder')}
+                keyboardType="numeric"
+                icon="cash-outline"
+                formatAsRupiah
+                hint={t('addTransaction.adminFeeHint')}
+              />
+              {(selectedWallet || selectedDestinationWallet || transferAdminFee > 0) && (
+                <View style={styles.transferSummaryCard}>
+                  <View style={styles.transferSummaryRow}>
+                    <Text style={styles.transferSummaryLabel}>{t('addTransaction.sourceWallet')}</Text>
+                    <Text style={styles.transferSummaryValue}>{selectedWallet?.name || '-'}</Text>
+                  </View>
+                  <View style={styles.transferSummaryRow}>
+                    <Text style={styles.transferSummaryLabel}>{t('addTransaction.destinationWallet')}</Text>
+                    <Text style={styles.transferSummaryValue}>{selectedDestinationWallet?.name || '-'}</Text>
+                  </View>
+                  <View style={styles.transferSummaryRow}>
+                    <Text style={styles.transferSummaryLabel}>{t('transaction.transferAmount')}</Text>
+                    <Text style={styles.transferSummaryValue}>
+                      Rp {parseAmount(amount).toLocaleString(language === 'en' ? 'en-US' : 'id-ID')}
+                    </Text>
+                  </View>
+                  <View style={styles.transferSummaryRow}>
+                    <Text style={styles.transferSummaryLabel}>{t('transaction.adminFee')}</Text>
+                    <Text style={styles.transferSummaryValue}>
+                      Rp {transferAdminFee.toLocaleString(language === 'en' ? 'en-US' : 'id-ID')}
+                    </Text>
+                  </View>
+                  <View style={[styles.transferSummaryRow, styles.transferSummaryRowStrong]}>
+                    <Text style={styles.transferSummaryLabelStrong}>{t('transaction.totalDeducted')}</Text>
+                    <Text style={styles.transferSummaryValueStrong}>
+                      Rp {transferSourceDeduction.toLocaleString(language === 'en' ? 'en-US' : 'id-ID')}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </>
+          ) : null}
+
           <View style={styles.fieldContainer}>
             <Text style={styles.fieldLabel}>{t('common.date')}</Text>
-            <TouchableOpacity style={styles.dateSelector} onPress={() => openDatePicker('transaction')}>
+            <TouchableOpacity style={styles.dateSelector} onPress={() => setShowDatePicker(true)}>
               <Ionicons name="calendar-outline" size={18} color={colors.textMuted} />
               <Text style={styles.dateText} numberOfLines={1}>
                 {formatDate(date, 'EEEE, dd MMMM yyyy', language)}
@@ -369,63 +508,22 @@ export const AddTransactionScreen = ({ navigation, route }) => {
 
           {showDatePicker && (
             <DateTimePicker
-              value={datePickerTarget === 'due' ? dueDate : date}
+              value={date}
               mode="date"
               display="default"
-              maximumDate={datePickerTarget === 'transaction' ? new Date() : undefined}
-              minimumDate={datePickerTarget === 'due' ? new Date() : undefined}
+              maximumDate={new Date()}
               onChange={(event, selectedDate) => {
                 setShowDatePicker(false);
-                if (!selectedDate) return;
-                if (datePickerTarget === 'due') setDueDate(selectedDate);
-                else setDate(selectedDate);
+                if (selectedDate) setDate(selectedDate);
               }}
             />
           )}
 
-          {isDebt ? (
-            <View style={styles.debtSection}>
-              <Text style={styles.sectionTitle}>{t('addTransaction.debtSection')}</Text>
-              <Input
-                label={t('addTransaction.creditorName')}
-                value={creditorName}
-                onChangeText={setCreditorName}
-                placeholder={t('addTransaction.creditorPlaceholder')}
-                icon="person-outline"
-                error={errors.creditorName}
-              />
-              <View style={styles.fieldContainer}>
-                <Text style={styles.fieldLabel}>{t('addTransaction.dueDate')}</Text>
-                <TouchableOpacity
-                  style={[styles.dateSelector, errors.dueDate && styles.fieldError]}
-                  onPress={() => openDatePicker('due')}
-                >
-                  <Ionicons name="alarm-outline" size={18} color={colors.textMuted} />
-                  <Text style={styles.dateText} numberOfLines={1}>
-                    {formatDate(dueDate, 'EEEE, dd MMMM yyyy', language)}
-                  </Text>
-                  <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-                {errors.dueDate ? <Text style={styles.errorText}>{errors.dueDate}</Text> : null}
-              </View>
-              <Input
-                label={t('addTransaction.remindBefore')}
-                value={remindDaysBefore}
-                onChangeText={setRemindDaysBefore}
-                placeholder={t('addTransaction.remindPlaceholder')}
-                keyboardType="numeric"
-                icon="notifications-outline"
-                hint={t('addTransaction.daysBeforeSuffix')}
-              />
-            </View>
-          ) : null}
-
-          {/* Description */}
           <Input
             label={t('addTransaction.description')}
             value={description}
             onChangeText={setDescription}
-            placeholder={isDebt ? t('addTransaction.debtDescriptionPlaceholder') : t('addTransaction.descriptionPlaceholder')}
+            placeholder={isTransfer ? t('addTransaction.transferDescriptionPlaceholder') : t('addTransaction.descriptionPlaceholder')}
             icon="document-text-outline"
             multiline
             numberOfLines={3}
@@ -433,15 +531,14 @@ export const AddTransactionScreen = ({ navigation, route }) => {
 
           <Button
             title={isEditMode
-              ? (isDebt ? t('addTransaction.updateDebtBtn') : t('addTransaction.updateBtn'))
-              : (isDebt ? t('addTransaction.addDebtBtn') : t('addTransaction.addBtn'))}
+              ? (isTransfer ? t('addTransaction.updateTransferBtn') : t('addTransaction.updateBtn'))
+              : (isTransfer ? t('addTransaction.addTransferBtn') : t('addTransaction.addBtn'))}
             onPress={handleSubmit}
             loading={loading}
             style={styles.submitBtn}
           />
         </ScrollView>
 
-        {/* Category Modal */}
         <Modal visible={showCategoryModal} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -463,7 +560,11 @@ export const AddTransactionScreen = ({ navigation, route }) => {
                       selectedCategory?.id === item.id && styles.categoryItemSelected,
                       { borderColor: item.color },
                     ]}
-                    onPress={() => { setSelectedCategory(item); setShowCategoryModal(false); }}
+                    onPress={() => {
+                      setSelectedCategory(item);
+                      setErrors((prev) => ({ ...prev, category: null }));
+                      setShowCategoryModal(false);
+                    }}
                   >
                     <Text style={styles.categoryItemIcon}>{item.icon}</Text>
                     <Text style={styles.categoryItemName} numberOfLines={2}>{getCategoryDisplayName(item)}</Text>
@@ -478,7 +579,7 @@ export const AddTransactionScreen = ({ navigation, route }) => {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{t('addTransaction.selectWallet')}</Text>
+                <Text style={styles.modalTitle}>{walletModalTitle}</Text>
                 <TouchableOpacity onPress={() => setShowWalletModal(false)}>
                   <Ionicons name="close" size={24} color={colors.textPrimary} />
                 </TouchableOpacity>
@@ -491,16 +592,25 @@ export const AddTransactionScreen = ({ navigation, route }) => {
                   <TouchableOpacity
                     style={[
                       styles.walletItem,
-                      selectedWallet?.id === item.id && styles.walletItemSelected,
+                      activeWalletSelection?.id === item.id && styles.walletItemSelected,
                     ]}
                     onPress={() => {
-                      setSelectedWallet(item);
-                      setErrors((prev) => ({ ...prev, wallet: null }));
+                      if (walletPickerTarget === 'destination') {
+                        setSelectedDestinationWallet(item);
+                        setErrors((prev) => ({ ...prev, destinationWallet: null }));
+                      } else {
+                        setSelectedWallet(item);
+                        setErrors((prev) => ({ ...prev, wallet: null }));
+                      }
                       setShowWalletModal(false);
                     }}
                   >
                     <View style={styles.walletItemIcon}>
-                      <Ionicons name="wallet-outline" size={18} color={colors.primary} />
+                      <Ionicons
+                        name={walletPickerTarget === 'destination' ? 'swap-horizontal-outline' : 'wallet-outline'}
+                        size={18}
+                        color={colors.primary}
+                      />
                     </View>
                     <View style={styles.walletItemInfo}>
                       <Text style={styles.walletItemName} numberOfLines={1}>{item.name}</Text>
@@ -549,8 +659,22 @@ const createStyles = (colors, { isCompact, isNarrow, categoryColumns, bottomInse
     borderRadius: BORDER_RADIUS.lg,
     padding: 4,
     marginBottom: SPACING.lg,
-    borderWidth: 1, borderColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
+  typeBtn: {
+    flex: 1,
+    paddingVertical: isNarrow ? 10 : 12,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+  },
+  typeBtnText: {
+    fontSize: isNarrow ? FONT_SIZE.sm : FONT_SIZE.md,
+    fontWeight: FONT_WEIGHT.medium,
+    fontFamily: FONT_FAMILY.medium,
+    color: colors.textMuted,
+  },
+  typeBtnTextActive: { color: '#FFFFFF', fontFamily: FONT_FAMILY.bold },
   receiptScannerCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -584,21 +708,14 @@ const createStyles = (colors, { isCompact, isNarrow, categoryColumns, bottomInse
     fontFamily: FONT_FAMILY.regular,
     marginTop: 2,
   },
-  typeBtn: {
-    flex: 1,
-    paddingVertical: isNarrow ? 10 : 12,
-    borderRadius: BORDER_RADIUS.md,
-    alignItems: 'center',
-  },
-  typeBtnText: {
-    fontSize: isNarrow ? FONT_SIZE.sm : FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.medium,
-    fontFamily: FONT_FAMILY.medium,
-    color: colors.textMuted,
-  },
-  typeBtnTextActive: { color: '#FFFFFF', fontFamily: FONT_FAMILY.bold },
   amountContainer: { marginBottom: SPACING.lg },
-  amountLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontWeight: '500', fontFamily: FONT_FAMILY.medium, marginBottom: 6 },
+  amountLabel: {
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '500',
+    fontFamily: FONT_FAMILY.medium,
+    marginBottom: 6,
+  },
   amountInput: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   currencySymbol: {
     fontSize: isCompact ? FONT_SIZE.lg : FONT_SIZE.xl,
@@ -614,22 +731,12 @@ const createStyles = (colors, { isCompact, isNarrow, categoryColumns, bottomInse
     color: colors.textPrimary,
   },
   fieldContainer: { marginBottom: SPACING.md },
-  fieldLabel: { color: colors.textSecondary, fontSize: FONT_SIZE.sm, fontWeight: '500', fontFamily: FONT_FAMILY.medium, marginBottom: 6 },
-  sectionTitle: {
-    color: colors.textPrimary,
-    fontSize: FONT_SIZE.md,
-    fontWeight: FONT_WEIGHT.bold,
-    fontFamily: FONT_FAMILY.bold,
-    marginBottom: SPACING.md,
-  },
-  debtSection: {
-    marginBottom: SPACING.sm,
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...SHADOWS.sm,
+  fieldLabel: {
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '500',
+    fontFamily: FONT_FAMILY.medium,
+    marginBottom: 6,
   },
   categorySelector: {
     flexDirection: 'row',
@@ -638,7 +745,56 @@ const createStyles = (colors, { isCompact, isNarrow, categoryColumns, bottomInse
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
-    borderWidth: 1, borderColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  transferSummaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...SHADOWS.sm,
+  },
+  transferSummaryRow: {
+    flexDirection: isCompact ? 'column' : 'row',
+    alignItems: isCompact ? 'flex-start' : 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+    paddingVertical: 6,
+  },
+  transferSummaryRowStrong: {
+    marginTop: 4,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  transferSummaryLabel: {
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.medium,
+    flex: 1,
+  },
+  transferSummaryValue: {
+    color: colors.textPrimary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.semibold,
+    textAlign: isCompact ? 'left' : 'right',
+    width: isCompact ? '100%' : 'auto',
+  },
+  transferSummaryLabelStrong: {
+    color: colors.textPrimary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.bold,
+    flex: 1,
+  },
+  transferSummaryValueStrong: {
+    color: colors.primary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.bold,
+    textAlign: isCompact ? 'left' : 'right',
+    width: isCompact ? '100%' : 'auto',
   },
   emptyWalletCard: {
     backgroundColor: colors.surface,
@@ -661,7 +817,13 @@ const createStyles = (colors, { isCompact, isNarrow, categoryColumns, bottomInse
     fontFamily: FONT_FAMILY.medium,
     flex: 1,
   },
-  categoryPlaceholder: { color: colors.textMuted, fontSize: FONT_SIZE.md, fontFamily: FONT_FAMILY.regular, flex: 1, paddingRight: SPACING.sm },
+  categoryPlaceholder: {
+    color: colors.textMuted,
+    fontSize: FONT_SIZE.md,
+    fontFamily: FONT_FAMILY.regular,
+    flex: 1,
+    paddingRight: SPACING.sm,
+  },
   errorText: { color: colors.expense, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular, marginTop: 4 },
   dateSelector: {
     flexDirection: 'row',
@@ -670,11 +832,11 @@ const createStyles = (colors, { isCompact, isNarrow, categoryColumns, bottomInse
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
-    borderWidth: 1, borderColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   dateText: { flex: 1, color: colors.textPrimary, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.regular },
   submitBtn: { marginTop: SPACING.lg, marginBottom: SPACING.md },
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: colors.overlay,

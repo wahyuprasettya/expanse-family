@@ -3,6 +3,7 @@ import { createNavigationContainerRef } from '@react-navigation/native';
 export const navigationRef = createNavigationContainerRef();
 
 const TRANSACTION_ENTITY_TYPES = new Set(['transaction', 'household_transaction']);
+const DEBT_ENTITY_TYPES = new Set(['debt']);
 const NOTE_ENTITY_TYPES = new Set(['note', 'note_assignment']);
 
 let pendingNotificationTarget = null;
@@ -34,16 +35,33 @@ const getNoteId = (payload = {}) =>
   payload?.metadata?.noteId ||
   null;
 
+const getDebtId = (payload = {}) =>
+  payload?.debtId ||
+  payload?.linkedDebtId ||
+  payload?.data?.debtId ||
+  payload?.data?.linkedDebtId ||
+  payload?.metadata?.debtId ||
+  payload?.metadata?.linkedDebtId ||
+  null;
+
 export const getNotificationNavigationTarget = (payload = {}) => {
   const entityType = getEntityType(payload);
   const entityId = getEntityId(payload);
   const transactionId = getTransactionId(payload) || (TRANSACTION_ENTITY_TYPES.has(entityType) ? entityId : null);
   const noteId = getNoteId(payload) || (NOTE_ENTITY_TYPES.has(entityType) ? entityId : null);
+  const debtId = getDebtId(payload) || (DEBT_ENTITY_TYPES.has(entityType) ? entityId : null);
 
   if (transactionId) {
     return {
       name: 'TransactionDetail',
       params: { transactionId },
+    };
+  }
+
+  if (debtId) {
+    return {
+      name: 'DebtDetail',
+      params: { debtId },
     };
   }
 

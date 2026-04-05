@@ -119,6 +119,7 @@ Recurring bill reminders and their notification schedules.
   "isActive":       "boolean",
   "reminderType":   "string ('bill' | 'debt')",
   "linkedTransactionId": "string | null",
+  "linkedDebtId":   "string | null",
   "notificationId": "string | null (Expo scheduled notification ID)",
   "createdAt":      "Timestamp",
   "updatedAt":      "Timestamp | null"
@@ -220,6 +221,61 @@ Funding sources used by transactions, such as cash, bank accounts, and e-wallets
 
 ---
 
+### 9. `debts/{debtId}`
+
+Debt and receivable records with installment tracking, due dates, and payment history.
+
+```json
+{
+  "householdId":        "string (shared account or owner UID)",
+  "userId":             "string (creator UID)",
+  "type":               "string ('debt' | 'receivable')",
+  "title":              "string",
+  "counterpartName":    "string",
+  "principalAmount":    "number",
+  "paidAmount":         "number",
+  "outstandingAmount":  "number",
+  "paymentScheme":      "string ('full' | 'installment')",
+  "installmentAmount":  "number | null",
+  "installmentFrequency":"string ('weekly' | 'monthly')",
+  "totalInstallments":  "number | null",
+  "paidInstallments":   "number",
+  "dueDate":            "string | null (ISO date for next due payment)",
+  "startDate":          "string (ISO date)",
+  "remindDaysBefore":   "number",
+  "walletId":           "string | null",
+  "walletName":         "string | null",
+  "description":        "string",
+  "paymentHistory": [
+    {
+      "id":             "string",
+      "amount":         "number",
+      "date":           "string (ISO date)",
+      "note":           "string",
+      "walletId":       "string | null",
+      "walletName":     "string | null",
+      "transactionId":  "string | null"
+    }
+  ],
+  "lastPaymentDate":    "string | null",
+  "status":             "string ('active' | 'overdue' | 'paid')",
+  "createdByUid":       "string",
+  "createdByName":      "string",
+  "updatedByUid":       "string",
+  "updatedByName":      "string",
+  "createdAt":          "Timestamp",
+  "updatedAt":          "Timestamp"
+}
+```
+
+**Composite Indexes required:**
+
+| Fields | Order | Purpose |
+|---|---|---|
+| `householdId` + `updatedAt` | DESC | Shared debt / receivable list |
+
+---
+
 ## Relationships Diagram
 
 ```
@@ -231,6 +287,7 @@ users/{uid}
     └── categories/{categoryId}        ← userId field
     └── assets/{assetId}               ← userId field
     └── wallets/{walletId}             ← userId field
+    └── debts/{debtId}                 ← householdId + userId fields
 ```
 
 > All collections are **top-level** (not subcollections) for easier querying with

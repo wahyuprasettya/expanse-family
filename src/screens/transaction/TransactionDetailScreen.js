@@ -68,19 +68,35 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
   }
 
   const isIncome = transaction.type === 'income';
+  const isTransfer = transaction.type === 'transfer';
   const isDebt = transaction.type === 'debt';
-  const typeColor = isIncome ? colors.income : colors.expense;
-  const gradientColors = isIncome ? colors.gradients.income : colors.gradients.expense;
+  const isLinkedDebtFlow = Boolean(transaction.debtMeta?.linkedDebtId);
+  const transferAdminFee = Number(transaction.transferMeta?.adminFee || 0);
+  const sourceWalletName = transaction.transferMeta?.sourceWalletName || transaction.walletName || '-';
+  const destinationWalletName = transaction.transferMeta?.destinationWalletName || '-';
+  const typeColor = isTransfer ? colors.primary : isIncome ? colors.income : colors.expense;
+  const gradientColors = isTransfer
+    ? colors.gradients.primary
+    : isIncome
+      ? colors.gradients.income
+      : colors.gradients.expense;
   const category = categories.find((item) => item.id === transaction.categoryId);
-  const categoryName = category?.isDefault && category?.id
-    ? (() => {
-        const translatedName = t(`categories.names.${category.id}`);
-        return translatedName !== `categories.names.${category.id}` ? translatedName : category.name;
-      })()
-    : category?.name || transaction.category;
+  const categoryName = isTransfer
+    ? t('common.transfer')
+    : category?.isDefault && category?.id
+      ? (() => {
+          const translatedName = t(`categories.names.${category.id}`);
+          return translatedName !== `categories.names.${category.id}` ? translatedName : category.name;
+        })()
+      : category?.name || transaction.category;
   const transactionActorName = transaction.createdByName || t('profile.fallbackUser');
 
   const handleDelete = () => {
+    if (isLinkedDebtFlow) {
+      Alert.alert(t('transactions.managedByDebtTitle'), t('transactions.managedByDebtMessage'));
+      return;
+    }
+
     Alert.alert(t('transaction.deleteTitle'), t('transaction.deleteMessage'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
@@ -95,6 +111,11 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
   };
 
   const handleEdit = () => {
+    if (isLinkedDebtFlow) {
+      navigation.navigate('DebtDetail', { debtId: transaction.debtMeta?.linkedDebtId });
+      return;
+    }
+
     navigation.navigate('AddTransaction', {
       transactionId: transaction.id,
       transaction,
@@ -117,21 +138,31 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{t('transaction.title')}</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity onPress={handleEdit} style={styles.headerIconBtn}>
-            <Ionicons name="create-outline" size={21} color="#FFF" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleDelete} style={styles.headerIconBtn}>
-            <Ionicons name="trash-outline" size={22} color="#FFF" />
-          </TouchableOpacity>
+          {transaction.type !== 'debt' ? (
+            <TouchableOpacity onPress={handleEdit} style={styles.headerIconBtn}>
+              <Ionicons name={isLinkedDebtFlow ? 'card-outline' : 'create-outline'} size={21} color="#FFF" />
+            </TouchableOpacity>
+          ) : null}
+          {!isLinkedDebtFlow ? (
+            <TouchableOpacity onPress={handleDelete} style={styles.headerIconBtn}>
+              <Ionicons name="trash-outline" size={22} color="#FFF" />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </LinearGradient>
 
       {/* Amount Card */}
       <View style={styles.amountSection}>
         <LinearGradient colors={gradientColors} style={styles.amountCard}>
-          <Text style={styles.categoryIcon}>{transaction.categoryIcon || '📦'}</Text>
+          <Text style={styles.categoryIcon}>{transaction.categoryIcon || (isTransfer ? '🔄' : '📦')}</Text>
           <Text style={styles.amountLabel}>
-            {isIncome ? t('common.income') : isDebt ? t('common.debt') : t('common.expense')}
+            {isTransfer
+              ? t('common.transfer')
+              : isIncome
+                ? t('common.income')
+                : isDebt
+                  ? t('common.debt')
+                  : t('common.expense')}
           </Text>
           <Text
             style={styles.amountValue}
@@ -139,9 +170,13 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
             adjustsFontSizeToFit
             minimumFontScale={0.72}
           >
-            {isIncome ? '+' : '-'}{formatCurrency(transaction.amount, 'IDR', language)}
+            {isTransfer ? '' : isIncome ? '+' : '-'}{formatCurrency(transaction.amount, 'IDR', language)}
           </Text>
-          <Text style={styles.categoryName} numberOfLines={2}>{categoryName}</Text>
+          <Text style={styles.categoryName} numberOfLines={2}>
+            {isTransfer
+              ? `${sourceWalletName} -> ${destinationWalletName}`
+              : categoryName}
+          </Text>
         </LinearGradient>
       </View>
 
@@ -153,11 +188,22 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
         <View style={styles.detailCard}>
           <DetailRow label={t('common.date')} value={formatDate(transaction.date, 'EEEE, dd MMMM yyyy', language)} />
           <DetailRow label={t('common.time')} value={formatTime(transaction.date, language)} />
-          <DetailRow label={t('common.category')} value={categoryName} />
-          {transaction.walletName ? (
+          {!isTransfer ? <DetailRow label={t('common.category')} value={categoryName} /> : null}
+          {isTransfer ? (
+            <>
+              <DetailRow label={t('transaction.sourceWallet')} value={sourceWalletName} />
+              <DetailRow label={t('transaction.destinationWallet')} value={destinationWalletName} />
+              <DetailRow label={t('transaction.transferAmount')} value={formatCurrency(transaction.amount, 'IDR', language)} />
+              <DetailRow label={t('transaction.adminFee')} value={formatCurrency(transferAdminFee, 'IDR', language)} />
+              <DetailRow label={t('transaction.totalDeducted')} value={formatCurrency(transaction.amount + transferAdminFee, 'IDR', language)} />
+            </>
+          ) : transaction.walletName ? (
             <DetailRow label={t('wallets.wallet')} value={transaction.walletName} />
           ) : null}
           <DetailRow label={t('transaction.type')} value={t(`transaction.typeValue.${transaction.type}`)} valueColor={typeColor} />
+          {isLinkedDebtFlow ? (
+            <DetailRow label={t('debts.title')} value={t('debts.manageFromDebt')} />
+          ) : null}
           {transaction.createdByName ? (
             <DetailRow label={t('transaction.addedBy')} value={transaction.createdByName} />
           ) : null}
@@ -181,15 +227,22 @@ export const TransactionDetailScreen = ({ navigation, route }) => {
 
         {/* Quick Stats: last 3 same-category transactions */}
         <View style={styles.relatedSection}>
-          <Text style={styles.relatedTitle}>{t('transaction.aboutCategory')}</Text>
+          <Text style={styles.relatedTitle}>{isTransfer ? t('transaction.aboutTransfer') : t('transaction.aboutCategory')}</Text>
           <View style={[styles.relatedCard, { borderColor: typeColor }]}>
             <Text style={styles.relatedText}>
-              {t('transaction.categoryInfo', {
-                actorName: transactionActorName,
-                category: categoryName,
-                type: transaction.type,
-                amount: formatCurrency(transaction.amount, 'IDR', language),
-              })}
+              {isTransfer
+                ? t('transaction.transferInfo', {
+                    actorName: transactionActorName,
+                    amount: formatCurrency(transaction.amount, 'IDR', language),
+                    from: sourceWalletName,
+                    to: destinationWalletName,
+                  })
+                : t('transaction.categoryInfo', {
+                    actorName: transactionActorName,
+                    category: categoryName,
+                    type: transaction.type,
+                    amount: formatCurrency(transaction.amount, 'IDR', language),
+                  })}
             </Text>
           </View>
         </View>

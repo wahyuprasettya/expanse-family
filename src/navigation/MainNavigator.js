@@ -22,8 +22,11 @@ import NotificationsScreen from '@screens/main/NotificationsScreen';
 import NotesScreen from '@screens/main/NotesScreen';
 import InsightsScreen from '@screens/main/InsightsScreen';
 import WalletsScreen from '@screens/main/WalletsScreen';
+import DebtsScreen from '@screens/main/DebtsScreen';
 import ScanReceiptScreen from '@screens/receipt/ScanReceiptScreen';
 import ReceiptCameraScreen from '@screens/receipt/ReceiptCameraScreen';
+import AddDebtScreen from '@screens/debt/AddDebtScreen';
+import DebtDetailScreen from '@screens/debt/DebtDetailScreen';
 import { BORDER_RADIUS, FONT_FAMILY } from '@constants/theme';
 import { useTranslation } from '@hooks/useTranslation';
 import { useAppTheme } from '@hooks/useAppTheme';
@@ -108,6 +111,13 @@ const MainNavigator = () => {
       <Stack.Screen name="Insights" component={InsightsScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Wallets" component={WalletsScreen} />
+      <Stack.Screen name="Debts" component={DebtsScreen} />
+      <Stack.Screen
+        name="AddDebt"
+        component={AddDebtScreen}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen name="DebtDetail" component={DebtDetailScreen} />
       <Stack.Screen
         name="Pin"
         component={PinScreen}

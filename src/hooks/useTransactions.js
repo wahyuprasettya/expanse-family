@@ -67,13 +67,10 @@ export const useTransactions = () => {
       }
     }
 
-    const walletImpact = getWalletImpact(data);
-    if (walletImpact) {
+    const walletAdjustments = getWalletAdjustments(data);
+    if (walletAdjustments.length > 0) {
       try {
-        const { error: walletError } = await adjustWalletBalance(walletImpact.walletId, walletImpact.delta);
-        if (walletError) {
-          throw new Error(walletError);
-        }
+        await applyWalletAdjustments(walletAdjustments);
       } catch (sideEffectError) {
         console.warn('Wallet balance update failed:', sideEffectError);
       }
@@ -202,6 +199,7 @@ export const useTransactions = () => {
       description: data.description || '',
       date: data.date,
       debtMeta: data.debtMeta || null,
+      transferMeta: data.transferMeta || null,
       updatedByUid: user.uid,
       updatedByName: user.displayName || user.email || 'Member',
       userId: previous.userId || user.uid,
@@ -227,8 +225,8 @@ export const useTransactions = () => {
           type: data.type,
         })
       : null;
-    const previousWalletImpact = getWalletImpact(previous);
-    const nextWalletImpact = getWalletImpact(data);
+    const previousWalletAdjustments = getWalletAdjustments(previous);
+    const nextWalletAdjustments = getWalletAdjustments(data);
 
     try {
       if (previousBudgetKey && nextBudgetKey
@@ -275,27 +273,13 @@ export const useTransactions = () => {
     }
 
     try {
-      if (previousWalletImpact && nextWalletImpact && previousWalletImpact.walletId === nextWalletImpact.walletId) {
-        const delta = nextWalletImpact.delta - previousWalletImpact.delta;
-        if (delta !== 0) {
-          const { error: walletError } = await adjustWalletBalance(nextWalletImpact.walletId, delta);
-          if (walletError) {
-            throw new Error(walletError);
-          }
-        }
-      } else {
-        if (previousWalletImpact) {
-          const { error: previousWalletError } = await adjustWalletBalance(previousWalletImpact.walletId, -previousWalletImpact.delta);
-          if (previousWalletError) {
-            throw new Error(previousWalletError);
-          }
-        }
-        if (nextWalletImpact) {
-          const { error: nextWalletError } = await adjustWalletBalance(nextWalletImpact.walletId, nextWalletImpact.delta);
-          if (nextWalletError) {
-            throw new Error(nextWalletError);
-          }
-        }
+      const deltaAdjustments = mergeWalletAdjustments(
+        invertWalletAdjustments(previousWalletAdjustments),
+        nextWalletAdjustments
+      );
+
+      if (deltaAdjustments.length > 0) {
+        await applyWalletAdjustments(deltaAdjustments);
       }
     } catch (sideEffectError) {
       console.warn('Wallet adjustment on transaction update failed:', sideEffectError);
@@ -354,7 +338,7 @@ export const useTransactions = () => {
     const { error } = await deleteTxService(txId);
     if (!error) {
       const budgetKey = getExpenseBudgetKey(transactionToDelete);
-      const walletImpact = getWalletImpact(transactionToDelete);
+      const walletAdjustments = invertWalletAdjustments(getWalletAdjustments(transactionToDelete));
       try {
         await deleteRemindersByTransactionId(txId);
       } catch (sideEffectError) {
@@ -376,12 +360,9 @@ export const useTransactions = () => {
         }
       }
 
-      if (walletImpact) {
+      if (walletAdjustments.length > 0) {
         try {
-          const { error: walletError } = await adjustWalletBalance(walletImpact.walletId, -walletImpact.delta);
-          if (walletError) {
-            throw new Error(walletError);
-          }
+          await applyWalletAdjustments(walletAdjustments);
         } catch (sideEffectError) {
           console.warn('Wallet adjustment on transaction delete failed:', sideEffectError);
         }
@@ -432,6 +413,10 @@ const getTransactionNotificationConfig = (type, categoryIcon, t) => {
       icon: categoryIcon || '💰',
       title: t('transactionNotification.incomeTitle'),
     },
+    transfer: {
+      icon: categoryIcon || '🔄',
+      title: t('transactionNotification.transferTitle'),
+    },
     debt: {
       icon: categoryIcon || '🧾',
       title: t('transactionNotification.debtTitle'),
@@ -463,18 +448,64 @@ const normalizeBudgetWalletId = (walletId) => walletId || null;
 const matchesBudgetWallet = (budget, walletId) =>
   normalizeBudgetWalletId(budget?.walletId) === normalizeBudgetWalletId(walletId);
 
-const getWalletImpact = (transaction) => {
-  if (!transaction?.walletId || !transaction?.amount) {
-    return null;
+const getWalletAdjustments = (transaction) => {
+  if (!transaction?.amount) {
+    return [];
   }
 
   const amount = Number(transaction.amount) || 0;
   if (amount === 0) {
-    return null;
+    return [];
   }
 
-  return {
+  if (transaction.type === 'transfer') {
+    const sourceWalletId = transaction.transferMeta?.sourceWalletId || transaction.walletId;
+    const destinationWalletId = transaction.transferMeta?.destinationWalletId || null;
+    const adminFee = Number(transaction.transferMeta?.adminFee) || 0;
+
+    return mergeWalletAdjustments([
+      sourceWalletId ? { walletId: sourceWalletId, delta: -(amount + adminFee) } : null,
+      destinationWalletId ? { walletId: destinationWalletId, delta: amount } : null,
+    ].filter(Boolean));
+  }
+
+  if (!transaction.walletId) {
+    return [];
+  }
+
+  return [{
     walletId: transaction.walletId,
     delta: transaction.type === 'income' ? amount : -amount,
-  };
+  }];
+};
+
+const invertWalletAdjustments = (adjustments = []) =>
+  adjustments.map((adjustment) => ({
+    ...adjustment,
+    delta: -adjustment.delta,
+  }));
+
+const mergeWalletAdjustments = (...adjustmentGroups) => {
+  const totals = new Map();
+
+  adjustmentGroups
+    .flat()
+    .filter(Boolean)
+    .forEach((adjustment) => {
+      if (!adjustment.walletId || !adjustment.delta) return;
+      totals.set(adjustment.walletId, (totals.get(adjustment.walletId) || 0) + adjustment.delta);
+    });
+
+  return Array.from(totals.entries())
+    .map(([walletId, delta]) => ({ walletId, delta }))
+    .filter((adjustment) => adjustment.delta !== 0);
+};
+
+const applyWalletAdjustments = async (adjustments = []) => {
+  for (const adjustment of adjustments) {
+    const { error } = await adjustWalletBalance(adjustment.walletId, adjustment.delta);
+    if (error) {
+      throw new Error(error);
+    }
+  }
 };

@@ -16,10 +16,24 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
   const { colors } = useAppTheme();
   const styles = createStyles(colors, { isCompact });
   const isIncome = transaction.type === 'income';
+  const isTransfer = transaction.type === 'transfer';
   const isDebt = transaction.type === 'debt';
+  const isLinkedDebtFlow = Boolean(transaction.debtMeta?.linkedDebtId);
   const isLargeTransaction = transaction.amount >= 1000000;
-  const amountColor = isIncome ? colors.income : colors.expense;
-  const amountPrefix = isIncome ? '+' : '-';
+  const transferRoute = isTransfer
+    ? t('transactionCard.transferRoute', {
+        from: transaction.transferMeta?.sourceWalletName || transaction.walletName || '-',
+        to: transaction.transferMeta?.destinationWalletName || '-',
+      })
+    : null;
+  const transferFee = isTransfer && Number(transaction.transferMeta?.adminFee || 0) > 0
+    ? t('transactionCard.transferFee', {
+        amount: formatCurrency(Number(transaction.transferMeta?.adminFee || 0), 'IDR', language),
+      })
+    : null;
+  const amountColor = isTransfer ? colors.primary : isIncome ? colors.income : colors.expense;
+  const amountPrefix = isTransfer ? '' : isIncome ? '+' : '-';
+  const categoryLabel = isTransfer ? t('common.transfer') : transaction.category;
   const fullAmount = formatCurrency(transaction.amount, 'IDR', language);
   const compactAmount = formatCurrencyCompact(transaction.amount, 'IDR', language);
   const showCompactAmount = isLargeTransaction && compactAmount !== fullAmount;
@@ -46,23 +60,32 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
       >
         {/* Category Icon */}
         <View style={[styles.iconContainer, { backgroundColor: `${transaction.categoryColor || colors.primary}20` }]}>
-          <Text style={styles.categoryIcon}>{transaction.categoryIcon || '📦'}</Text>
+          <Text style={styles.categoryIcon}>{transaction.categoryIcon || (isTransfer ? '🔄' : '📦')}</Text>
         </View>
 
         {/* Info */}
         <View style={styles.info}>
           <Text style={styles.category} numberOfLines={1} ellipsizeMode="tail">
-            {transaction.category}
+            {categoryLabel}
           </Text>
           <Text style={styles.description} numberOfLines={1} ellipsizeMode="tail">
-            {transaction.description || debtSubtitle || formatDateSmart(transaction.date, language, {
+            {transaction.description || transferRoute || debtSubtitle || formatDateSmart(transaction.date, language, {
               today: t('common.today'),
               yesterday: t('common.yesterday'),
             })}
           </Text>
-          {transaction.walletName ? (
+          {isTransfer ? (
+            <Text style={styles.walletLine} numberOfLines={1} ellipsizeMode="tail">
+              {'↔ '}{transferRoute}
+            </Text>
+          ) : transaction.walletName ? (
             <Text style={styles.walletLine} numberOfLines={1} ellipsizeMode="tail">
               {'👛 '}{transaction.walletName}
+            </Text>
+          ) : null}
+          {transferFee ? (
+            <Text style={styles.transferFeeLine} numberOfLines={1} ellipsizeMode="tail">
+              {transferFee}
             </Text>
           ) : null}
           {transaction.createdByName ? (
@@ -103,14 +126,20 @@ export const TransactionCard = ({ transaction, onPress, onDelete }) => {
             ) : null}
             <View style={[styles.typeBadge, { backgroundColor: `${amountColor}20` }]}>
               <Text style={[styles.typeText, { color: amountColor }]}>
-                {isIncome ? t('transactionCard.income') : isDebt ? t('transactionCard.debt') : t('transactionCard.expense')}
+                {isTransfer
+                  ? t('transactionCard.transfer')
+                  : isIncome
+                    ? t('transactionCard.income')
+                    : isDebt
+                      ? t('transactionCard.debt')
+                      : t('transactionCard.expense')}
               </Text>
             </View>
           </View>
         </View>
       </TouchableOpacity>
 
-      {onDelete && (
+      {onDelete && !isLinkedDebtFlow && (
         <TouchableOpacity onPress={() => onDelete(transaction.id)} style={styles.deleteBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
         </TouchableOpacity>
@@ -176,6 +205,12 @@ const createStyles = (colors, { isCompact }) => StyleSheet.create({
     color: colors.primary,
     fontSize: FONT_SIZE.xs,
     fontFamily: FONT_FAMILY.medium,
+    marginTop: 2,
+  },
+  transferFeeLine: {
+    color: colors.textMuted,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.regular,
     marginTop: 2,
   },
   time: {

@@ -39,7 +39,7 @@ const transactionSlice = createSlice({
       if (action.payload.type === 'income') {
         state.balance += action.payload.amount;
         state.totalIncome += action.payload.amount;
-      } else {
+      } else if (action.payload.type === 'expense' || action.payload.type === 'debt') {
         state.balance -= action.payload.amount;
         state.totalExpense += action.payload.amount;
       }
@@ -50,7 +50,7 @@ const transactionSlice = createSlice({
         if (tx.type === 'income') {
           state.balance -= tx.amount;
           state.totalIncome -= tx.amount;
-        } else {
+        } else if (tx.type === 'expense' || tx.type === 'debt') {
           state.balance += tx.amount;
           state.totalExpense -= tx.amount;
         }

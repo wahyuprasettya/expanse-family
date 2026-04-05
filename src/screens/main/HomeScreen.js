@@ -12,6 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { selectUser } from '@store/authSlice';
 import { selectBalance, selectTotalIncome, selectTotalExpense, selectTransactions, selectTransactionsLoading } from '@store/transactionSlice';
 import { selectCategories } from '@store/categorySlice';
+import { selectDebtSummary } from '@store/debtSlice';
 import { selectTotalWalletBalance, selectWallets } from '@store/walletSlice';
 import { selectUpcomingReminders, selectRemindersLoading } from '@store/reminderSlice';
 import { selectBudgetsLoading } from '@store/budgetSlice';
@@ -42,6 +43,7 @@ export const HomeScreen = ({ navigation }) => {
   const transactions = useSelector(selectTransactions);
   const transactionsLoading = useSelector(selectTransactionsLoading);
   const categories = useSelector(selectCategories);
+  const debtSummary = useSelector(selectDebtSummary);
   const upcomingReminders = useSelector(selectUpcomingReminders);
   const remindersLoading = useSelector(selectRemindersLoading);
   const budgetsLoading = useSelector(selectBudgetsLoading);
@@ -73,6 +75,12 @@ export const HomeScreen = ({ navigation }) => {
   }, [transactions, categories, t]);
 
   const handleDelete = (transactionId) => {
+    const transaction = transactions.find((item) => item.id === transactionId);
+    if (transaction?.debtMeta?.linkedDebtId) {
+      Alert.alert(t('transactions.managedByDebtTitle'), t('transactions.managedByDebtMessage'));
+      return;
+    }
+
     Alert.alert(t('transactions.deleteTitle'), t('transactions.deleteMessage'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
@@ -347,6 +355,43 @@ export const HomeScreen = ({ navigation }) => {
                   </Text>
                 </View>
               ))}
+            </View>
+          )}
+
+          {(debtSummary.activeCount > 0 || debtSummary.paidCount > 0) && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>🧾 {t('home.debtOverview')}</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Debts')}>
+                  <Text style={styles.seeAll}>{t('common.seeAll')}</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.debtOverviewCard}
+                activeOpacity={0.85}
+                onPress={() => navigation.navigate('Debts')}
+              >
+                <View style={styles.debtOverviewRow}>
+                  <View style={styles.debtPill}>
+                    <Text style={styles.debtPillLabel}>{t('debts.summaryDebt')}</Text>
+                    <Text style={[styles.debtPillValue, { color: colors.expense }]}>
+                      {formatCurrency(debtSummary.debtOutstanding, 'IDR', language)}
+                    </Text>
+                  </View>
+                  <View style={styles.debtPill}>
+                    <Text style={styles.debtPillLabel}>{t('debts.summaryReceivable')}</Text>
+                    <Text style={[styles.debtPillValue, { color: colors.income }]}>
+                      {formatCurrency(debtSummary.receivableOutstanding, 'IDR', language)}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.debtOverviewText}>
+                  {t('home.debtOverviewHelper', {
+                    active: debtSummary.activeCount,
+                    due: debtSummary.dueSoonCount + debtSummary.overdueCount,
+                  })}
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -633,6 +678,41 @@ const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => StyleShee
   alertMeta: { alignItems: 'flex-end', marginRight: SPACING.xs, flexShrink: 0 },
   alertMetaValue: { color: colors.warning, fontSize: FONT_SIZE.sm, fontFamily: FONT_FAMILY.bold },
   alertMetaStatus: { color: colors.textMuted, fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.medium, marginTop: 2 },
+  debtOverviewCard: {
+    backgroundColor: colors.surface,
+    borderRadius: BORDER_RADIUS.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: SPACING.md,
+    ...SHADOWS.sm,
+  },
+  debtOverviewRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  debtPill: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+  },
+  debtPillLabel: {
+    color: colors.textMuted,
+    fontSize: FONT_SIZE.xs,
+    fontFamily: FONT_FAMILY.medium,
+  },
+  debtPillValue: {
+    fontSize: FONT_SIZE.md,
+    fontFamily: FONT_FAMILY.bold,
+    marginTop: 4,
+  },
+  debtOverviewText: {
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.regular,
+    lineHeight: 20,
+    marginTop: SPACING.sm,
+  },
   reminderCard: {
     flexDirection: isCompact ? 'column' : 'row',
     justifyContent: 'space-between',

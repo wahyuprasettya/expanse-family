@@ -59,8 +59,16 @@ export const WalletsScreen = ({ navigation }) => {
 
   const walletStats = useMemo(() => {
     const counts = transactions.reduce((accumulator, transaction) => {
-      if (!transaction.walletId) return accumulator;
-      accumulator[transaction.walletId] = (accumulator[transaction.walletId] || 0) + 1;
+      const walletIds = transaction.type === 'transfer'
+        ? [
+            transaction.transferMeta?.sourceWalletId || transaction.walletId,
+            transaction.transferMeta?.destinationWalletId,
+          ].filter(Boolean)
+        : [transaction.walletId].filter(Boolean);
+
+      walletIds.forEach((walletId) => {
+        accumulator[walletId] = (accumulator[walletId] || 0) + 1;
+      });
       return accumulator;
     }, {});
 

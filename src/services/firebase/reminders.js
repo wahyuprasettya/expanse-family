@@ -81,7 +81,18 @@ export const scheduleReminderNotification = async (reminder, t) => {
       content: {
         title,
         body,
-        data: { reminderId: reminder.id, type: reminder.reminderType || 'bill' },
+        data: {
+          reminderId: reminder.id,
+          type: reminder.reminderType || 'bill',
+          linkedDebtId: reminder.linkedDebtId || null,
+          transactionId: reminder.linkedTransactionId || null,
+          entityType: reminder.linkedDebtId
+            ? 'debt'
+            : reminder.linkedTransactionId
+              ? 'transaction'
+              : reminder.reminderType || 'bill',
+          entityId: reminder.linkedDebtId || reminder.linkedTransactionId || reminder.id,
+        },
       },
       trigger: Platform.OS === 'android'
         ? { date: triggerDate, channelId: REMINDER_CHANNEL_ID }
@@ -105,6 +116,7 @@ export const addReminder = async (userId, reminderData, t = (key, params) => key
       isRecurring: reminderData.isRecurring ?? true,
       daysBefore: reminderData.daysBefore ?? 1,
       linkedTransactionId: reminderData.linkedTransactionId || null,
+      linkedDebtId: reminderData.linkedDebtId || null,
       reminderType: reminderData.reminderType || 'bill',
       isActive: true,
       notificationId: null,
@@ -244,6 +256,40 @@ export const deleteRemindersByTransactionId = async (linkedTransactionId) => {
   }
 };
 
+export const deleteRemindersByDebtId = async (linkedDebtId) => {
+  try {
+    const q = query(
+      collection(db, REMINDERS_COLLECTION),
+      where('linkedDebtId', '==', linkedDebtId)
+    );
+    const snapshot = await getDocs(q);
+
+    await Promise.all(snapshot.docs.map(async (reminderDoc) => {
+      const reminder = reminderDoc.data();
+      if (reminder.notificationId) {
+        await cancelNotificationIfNeeded(reminder.notificationId);
+      }
+      if (reminder.userId) {
+        await logAppNotification({
+          userId: reminder.userId,
+          title: 'Reminder dihapus',
+          body: `${reminder.name || 'Reminder'} dihapus karena catatan hutang berubah`,
+          action: 'delete',
+          entityType: 'reminder',
+          entityId: reminderDoc.id,
+          actorName: 'Member',
+          metadata: { reminderType: reminder.reminderType || 'debt' },
+        });
+      }
+      await deleteDoc(reminderDoc.ref);
+    }));
+
+    return { error: null };
+  } catch (error) {
+    return { error: error.message };
+  }
+};
+
 // ─── Subscribe to Reminders ──────────────────────────────────
 export const subscribeToReminders = (userId, callback) => {
   const q = query(
@@ -260,6 +306,7 @@ export const subscribeToReminders = (userId, callback) => {
 
 export const syncDebtReminder = async ({
   transactionId,
+  debtId,
   userId,
   creditorName,
   category,
@@ -270,7 +317,7 @@ export const syncDebtReminder = async ({
 }, t = (key, params) => key) => {
   const q = query(
     collection(db, REMINDERS_COLLECTION),
-    where('linkedTransactionId', '==', transactionId),
+    where(debtId ? 'linkedDebtId' : 'linkedTransactionId', '==', debtId || transactionId),
     where('userId', '==', userId)
   );
   const snapshot = await getDocs(q);
@@ -282,7 +329,8 @@ export const syncDebtReminder = async ({
     dueDate,
     daysBefore: remindDaysBefore,
     isRecurring: false,
-    linkedTransactionId: transactionId,
+    linkedTransactionId: transactionId || null,
+    linkedDebtId: debtId || null,
     reminderType: 'debt',
     isActive,
     userId,

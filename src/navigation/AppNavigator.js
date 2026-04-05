@@ -20,6 +20,7 @@ import { useAssetSync } from '@hooks/useAssetSync';
 import { useAppNotificationSync } from '@hooks/useAppNotificationSync';
 import { useLegacyCleanup } from '@hooks/useLegacyCleanup';
 import { useWalletSync } from '@hooks/useWalletSync';
+import { useDebtSync } from '@hooks/useDebtSync';
 import { flushPendingNotificationNavigation, navigateToNotificationTarget, navigationRef } from './notificationNavigation';
 
 export const AppNavigator = () => {
@@ -32,6 +33,7 @@ export const AppNavigator = () => {
   useBudgetSync(now.getFullYear(), now.getMonth() + 1);
   useAssetSync();
   useWalletSync();
+  useDebtSync();
   useAppNotificationSync();
   useLegacyCleanup();
   const isAuthenticated = useSelector(selectIsAuthenticated);

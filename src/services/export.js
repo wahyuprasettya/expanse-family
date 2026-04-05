@@ -127,7 +127,7 @@ export const exportToCSV = async (transactions, summary = null, filename = 'tran
 
     const transactionRows = transactions.map((t) => [
       format(new Date(t.date), 'dd/MM/yyyy'),
-      t.type,
+      translations[language]?.transaction?.typeValue?.[t.type] || t.type,
       t.category,
       `"${t.description || ''}"`,
       t.amount,
@@ -196,11 +196,16 @@ export const exportToPDF = async (transactions, summary, filename = 'report', la
     const intlLocale = language === 'en' ? 'en-US' : 'id-ID';
 
     const rows = transactions.map((transaction) => {
-      const typeLabel = transaction.type === 'income' ? translations[language]?.common?.income || 'Income' : translations[language]?.common?.expense || 'Expense';
+      const typeLabel = translations[language]?.transaction?.typeValue?.[transaction.type] || transaction.type;
+      const typeColor = transaction.type === 'income'
+        ? '#10B981'
+        : transaction.type === 'transfer'
+          ? '#6366F1'
+          : '#EF4444';
       return `
       <tr>
         <td>${format(new Date(transaction.date), 'dd/MM/yyyy', { locale: dateLocale })}</td>
-        <td style="color:${transaction.type === 'income' ? '#10B981' : '#EF4444'}">${typeLabel}</td>
+        <td style="color:${typeColor}">${typeLabel}</td>
         <td>${transaction.category}</td>
         <td>${transaction.description || '-'}</td>
         <td style="text-align:right;font-weight:bold;">Rp ${transaction.amount.toLocaleString(intlLocale)}</td>

@@ -34,7 +34,7 @@ export const addTransaction = async (accountId, actor, transactionData) => {
       createdByUid: actor.uid,
       createdByName: actor.displayName || actor.email || 'Member',
       amount: transactionData.amount,
-      type: transactionData.type, // 'income' | 'expense'
+      type: transactionData.type, // 'income' | 'expense' | 'transfer'
       category: transactionData.category,
       categoryId: transactionData.categoryId,
       walletId: transactionData.walletId || null,
@@ -44,6 +44,7 @@ export const addTransaction = async (accountId, actor, transactionData) => {
       receiptUrl: transactionData.receiptUrl || null,
       tags: transactionData.tags || [],
       debtMeta: transactionData.debtMeta || null,
+      transferMeta: transactionData.transferMeta || null,
       clientRequestId: transactionData.clientRequestId || null,
       createdAt: now,
       updatedAt: now,

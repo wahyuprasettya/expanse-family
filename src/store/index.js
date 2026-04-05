@@ -13,6 +13,7 @@ import reminderReducer from './reminderSlice';
 import appNotificationReducer from './appNotificationSlice';
 import uiReducer from './uiSlice';
 import walletReducer from './walletSlice';
+import debtReducer from './debtSlice';
 import { serializeFirestoreValue } from '@utils/firestore';
 
 const budgetItemsTransform = createTransform(
@@ -70,6 +71,7 @@ export const store = configureStore({
     categories: categoryReducer,
     assets: persistedAssetReducer,
     wallets: persistedWalletReducer,
+    debts: debtReducer,
     reminders: reminderReducer,
     appNotifications: appNotificationReducer,
     ui: persistedUiReducer,

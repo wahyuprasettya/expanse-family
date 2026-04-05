@@ -14,6 +14,7 @@ import { selectCategories } from '@store/categorySlice';
 import { useTransactions } from '@hooks/useTransactions';
 import TransactionCard from '@components/transaction/TransactionCard';
 import LoadingState from '@components/common/LoadingState';
+import Input from '@components/common/Input';
 import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, FONT_FAMILY, SPACING } from '@constants/theme';
 import { formatDate } from '@utils/formatters';
 import { useTranslation } from '@hooks/useTranslation';
@@ -34,11 +35,13 @@ export const TransactionsScreen = ({ navigation }) => {
     { id: null, label: t('transactions.typeAll') },
     { id: 'expense', label: t('transactions.typeExpense') },
     { id: 'income', label: t('transactions.typeIncome') },
+    { id: 'transfer', label: t('transactions.typeTransfer') },
     { id: 'debt', label: t('transactions.typeDebt') },
   ];
 
   const [typeFilter, setTypeFilter] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const getCategoryDisplayName = (category) => {
     if (category?.isDefault && category?.id) {
@@ -54,12 +57,29 @@ export const TransactionsScreen = ({ navigation }) => {
   );
 
   const filtered = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
     return transactions.filter((transaction) => {
       if (typeFilter && transaction.type !== typeFilter) return false;
       if (categoryFilter && transaction.categoryId !== categoryFilter) return false;
+      if (normalizedQuery) {
+        const searchableFields = [
+          transaction.category,
+          transaction.description,
+          transaction.walletName,
+          transaction.createdByName,
+          transaction.transferMeta?.sourceWalletName,
+          transaction.transferMeta?.destinationWalletName,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        if (!searchableFields.includes(normalizedQuery)) return false;
+      }
       return true;
     });
-  }, [transactions, typeFilter, categoryFilter]);
+  }, [transactions, typeFilter, categoryFilter, searchQuery]);
 
   const grouped = useMemo(() => {
     const groups = {};
@@ -78,6 +98,12 @@ export const TransactionsScreen = ({ navigation }) => {
   }, [filtered, language, categoryMap, t]);
 
   const handleDelete = (transactionId) => {
+    const transaction = transactions.find((item) => item.id === transactionId);
+    if (transaction?.debtMeta?.linkedDebtId) {
+      Alert.alert(t('transactions.managedByDebtTitle'), t('transactions.managedByDebtMessage'));
+      return;
+    }
+
     Alert.alert(t('transactions.deleteTitle'), t('transactions.deleteMessage'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
@@ -109,9 +135,14 @@ export const TransactionsScreen = ({ navigation }) => {
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <LinearGradient colors={colors.gradients.header} style={styles.header}>
           <Text style={styles.title} numberOfLines={1}>{t('transactions.title')}</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('AddTransaction')} style={styles.addBtn}>
-            <Ionicons name="add" size={24} color={colors.primary} />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => navigation.navigate('Debts')} style={styles.addBtn}>
+              <Ionicons name="card-outline" size={21} color={colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('AddTransaction')} style={styles.addBtn}>
+              <Ionicons name="add" size={24} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
         </LinearGradient>
         <LoadingState />
       </SafeAreaView>
@@ -122,12 +153,25 @@ export const TransactionsScreen = ({ navigation }) => {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <LinearGradient colors={colors.gradients.header} style={styles.header}>
         <Text style={styles.title} numberOfLines={1}>{t('transactions.title')}</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('AddTransaction')} style={styles.addBtn}>
-          <Ionicons name="add" size={24} color={colors.primary} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => navigation.navigate('Debts')} style={styles.addBtn}>
+            <Ionicons name="card-outline" size={21} color={colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('AddTransaction')} style={styles.addBtn}>
+            <Ionicons name="add" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
 
       <View style={styles.filters}>
+        <Input
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder={t('transactions.searchPlaceholder')}
+          icon="search-outline"
+          style={styles.searchInput}
+        />
+
         <View style={styles.filterSection}>
           <Text style={styles.filterLabel}>{t('transaction.type')}</Text>
           <ScrollView
@@ -139,7 +183,10 @@ export const TransactionsScreen = ({ navigation }) => {
               <TouchableOpacity
                 key={String(filter.id)}
                 style={[styles.filterChip, typeFilter === filter.id && styles.filterChipActive]}
-                onPress={() => setTypeFilter(filter.id)}
+                onPress={() => {
+                  setTypeFilter(filter.id);
+                  if (filter.id === 'transfer') setCategoryFilter(null);
+                }}
               >
                 <Text style={[styles.filterChipText, typeFilter === filter.id && styles.filterChipTextActive]}>
                   {filter.label}
@@ -149,40 +196,42 @@ export const TransactionsScreen = ({ navigation }) => {
           </ScrollView>
         </View>
 
-        <View style={styles.filterSection}>
-          <Text style={styles.filterLabel}>{t('common.category')}</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator
-            contentContainerStyle={styles.horizontalFilterContent}
-          >
-            <TouchableOpacity
-              style={[styles.categoryChip, !categoryFilter && styles.categoryChipActive]}
-              onPress={() => setCategoryFilter(null)}
+        {typeFilter !== 'transfer' ? (
+          <View style={styles.filterSection}>
+            <Text style={styles.filterLabel}>{t('common.category')}</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator
+              contentContainerStyle={styles.horizontalFilterContent}
             >
-              <Ionicons
-                name="apps-outline"
-                size={14}
-                color={!categoryFilter ? '#FFFFFF' : colors.textMuted}
-              />
-              <Text style={[styles.categoryChipText, !categoryFilter && styles.categoryChipTextActive]}>
-                {t('common.all')}
-              </Text>
-            </TouchableOpacity>
-            {categories.map((category) => (
               <TouchableOpacity
-                key={category.id}
-                style={[styles.categoryChip, categoryFilter === category.id && styles.categoryChipActive]}
-                onPress={() => setCategoryFilter(category.id)}
+                style={[styles.categoryChip, !categoryFilter && styles.categoryChipActive]}
+                onPress={() => setCategoryFilter(null)}
               >
-                <Text>{category.icon}</Text>
-                <Text style={[styles.categoryChipText, categoryFilter === category.id && styles.categoryChipTextActive]}>
-                  {getCategoryDisplayName(category)}
+                <Ionicons
+                  name="apps-outline"
+                  size={14}
+                  color={!categoryFilter ? '#FFFFFF' : colors.textMuted}
+                />
+                <Text style={[styles.categoryChipText, !categoryFilter && styles.categoryChipTextActive]}>
+                  {t('common.all')}
                 </Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[styles.categoryChip, categoryFilter === category.id && styles.categoryChipActive]}
+                  onPress={() => setCategoryFilter(category.id)}
+                >
+                  <Text>{category.icon}</Text>
+                  <Text style={[styles.categoryChipText, categoryFilter === category.id && styles.categoryChipTextActive]}>
+                    {getCategoryDisplayName(category)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.stats}>
@@ -192,8 +241,8 @@ export const TransactionsScreen = ({ navigation }) => {
             suffix: filtered.length !== 1 ? 's' : '',
           })}
         </Text>
-        {(typeFilter || categoryFilter) && (
-          <TouchableOpacity onPress={() => { setTypeFilter(null); setCategoryFilter(null); }}>
+        {(typeFilter || categoryFilter || searchQuery) && (
+          <TouchableOpacity onPress={() => { setTypeFilter(null); setCategoryFilter(null); setSearchQuery(''); }}>
             <Text style={styles.clearFilter}>{t('common.clearFilters')}</Text>
           </TouchableOpacity>
         )}
@@ -227,6 +276,11 @@ const createStyles = (colors, { isCompact, bottomInset }) => StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
   title: { fontSize: FONT_SIZE.xl, fontFamily: FONT_FAMILY.bold, color: colors.textPrimary, flex: 1, marginRight: SPACING.sm },
   addBtn: {
     width: 40,
@@ -243,6 +297,9 @@ const createStyles = (colors, { isCompact, bottomInset }) => StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     gap: SPACING.sm,
+  },
+  searchInput: {
+    marginBottom: 0,
   },
   filterSection: {
     gap: 8,

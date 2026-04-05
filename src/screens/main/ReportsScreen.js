@@ -309,6 +309,7 @@ export const ReportsScreen = () => {
 
   const largeTransactions = useMemo(
     () => selectedMonthTransactions
+      .filter((transaction) => transaction.type !== 'transfer')
       .filter((transaction) => transaction.amount >= 1000000)
       .sort((first, second) => second.amount - first.amount)
       .map((transaction) => {
@@ -597,34 +598,38 @@ export const ReportsScreen = () => {
             </View>
           )}
 
-          {reportCategories.length > 0 && (
+          {reportCategories.filter((category) => category.type !== 'transfer').length > 0 && (
             <>
               <View style={styles.sectionSeparator} />
               <View style={styles.categoryBreakdown}>
                 <Text style={styles.chartTitle}>📋 {t('reports.categoryBreakdown')}</Text>
-                {reportCategories.slice().sort((a, b) => b.total - a.total).map((category, index) => {
-                  const total = category.type === 'income' ? report.income : report.expense;
-                  const percentage = total > 0 ? (category.total / total) * 100 : 0;
+                {reportCategories
+                  .filter((category) => category.type !== 'transfer')
+                  .slice()
+                  .sort((a, b) => b.total - a.total)
+                  .map((category, index) => {
+                    const total = category.type === 'income' ? report.income : report.expense;
+                    const percentage = total > 0 ? (category.total / total) * 100 : 0;
 
-                  return (
-                    <View key={index} style={[styles.categoryRow, isCompactScreen && styles.categoryRowCompact]}>
-                      <View style={[styles.categoryRowLeft, isCompactScreen && styles.categoryRowLeftCompact]}>
-                        <View style={[styles.categoryDot, { backgroundColor: colors.chart[index % colors.chart.length] }]} />
-                        <Text style={styles.categoryRowName}>{category.displayName}</Text>
-                        <Text style={styles.categoryRowCount}>({category.count}x)</Text>
+                    return (
+                      <View key={index} style={[styles.categoryRow, isCompactScreen && styles.categoryRowCompact]}>
+                        <View style={[styles.categoryRowLeft, isCompactScreen && styles.categoryRowLeftCompact]}>
+                          <View style={[styles.categoryDot, { backgroundColor: colors.chart[index % colors.chart.length] }]} />
+                          <Text style={styles.categoryRowName}>{category.displayName}</Text>
+                          <Text style={styles.categoryRowCount}>({category.count}x)</Text>
+                        </View>
+                        <View style={[styles.categoryRowRight, isCompactScreen && styles.categoryRowRightCompact]}>
+                          <Text style={[
+                            styles.categoryRowAmount,
+                            { color: category.type === 'income' ? colors.income : colors.expense },
+                          ]}>
+                            {formatCurrency(category.total, 'IDR', language)}
+                          </Text>
+                          <Text style={styles.categoryRowPct}>{Math.round(percentage)}%</Text>
+                        </View>
                       </View>
-                      <View style={[styles.categoryRowRight, isCompactScreen && styles.categoryRowRightCompact]}>
-                        <Text style={[
-                          styles.categoryRowAmount,
-                          { color: category.type === 'income' ? colors.income : colors.expense },
-                        ]}>
-                          {formatCurrency(category.total, 'IDR', language)}
-                        </Text>
-                        <Text style={styles.categoryRowPct}>{Math.round(percentage)}%</Text>
-                      </View>
-                    </View>
-                  );
-                })}
+                    );
+                  })}
 
               </View>
             </>
