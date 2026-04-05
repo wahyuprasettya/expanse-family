@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Button from '@components/common/Button';
-import { pickReceiptImage, extractTextFromReceiptImage, extractTextFromReceipt } from '@services/ocr';
+import { extractTextFromReceiptImage, extractTextFromReceipt } from '@services/ocr';
 import {
   BORDER_RADIUS,
   FONT_SIZE,
@@ -84,17 +84,6 @@ export const ScanReceiptScreen = ({ navigation, route }) => {
     navigation.setParams({ capturedReceipt: undefined });
   }, [navigation, route?.params?.capturedReceipt]);
 
-  const handlePickImage = async () => {
-    const { uri, base64, error } = await pickReceiptImage(false);
-    if (error) {
-      Alert.alert(t('common.error'), error);
-      return;
-    }
-    if (!uri || !base64) return;
-
-    await handleOCRResult({ uri, base64 });
-  };
-
   const handleAnalyzeText = async () => {
     setLoading(true);
     const result = await extractTextFromReceipt(rawText);
@@ -159,13 +148,6 @@ export const ScanReceiptScreen = ({ navigation, route }) => {
               <Ionicons name="camera" size={28} color="#FFFFFF" />
             </LinearGradient>
             <Text style={styles.scanBtnLabel}>{t('receipt.camera')}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.scanBtn} onPress={handlePickImage}>
-            <LinearGradient colors={colors.gradients.secondary} style={styles.scanBtnGradient}>
-              <Ionicons name="images" size={28} color={colors.primary} />
-            </LinearGradient>
-            <Text style={styles.scanBtnLabel}>{t('receipt.uploadReceipt')}</Text>
           </TouchableOpacity>
         </View>
 

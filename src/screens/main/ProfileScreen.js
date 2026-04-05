@@ -52,6 +52,7 @@ import { useBiometric } from "@hooks/useBiometric";
 import { updateProfile } from "firebase/auth";
 import { auth } from "@services/firebase/config";
 import { getOCRApiKey } from "@services/ocr";
+import { exportManualBackupToJSON } from "@services/export";
 
 const SettingRow = ({
   colors,
@@ -102,6 +103,8 @@ export const ProfileScreen = ({ navigation }) => {
   const [editName, setEditName] = useState(user?.displayName || "");
   const [editEmail, setEditEmail] = useState(user?.email || "");
   const [loading, setLoading] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [lastBackupAt, setLastBackupAt] = useState(null);
   const [pushDebugLoading, setPushDebugLoading] = useState(false);
   const [pushDebugInfo, setPushDebugInfo] = useState(null);
   const [showDebugTools, setShowDebugTools] = useState(false);
@@ -128,6 +131,12 @@ export const ProfileScreen = ({ navigation }) => {
     if (value.length <= 10) return value;
     return `${value.slice(0, 6)}...${value.slice(-4)}`;
   };
+
+  const formatBackupTime = (value) =>
+    new Date(value).toLocaleString(language === "en" ? "en-US" : "id-ID", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
 
   useEffect(() => {
     let isMounted = true;
@@ -348,6 +357,39 @@ export const ProfileScreen = ({ navigation }) => {
       { text: t("common.cancel"), style: "cancel" },
       { text: t("profile.signOut"), style: "destructive", onPress: handleConfirmLogout },
     ]);
+  };
+
+  const handleManualBackup = async () => {
+    if (backupLoading) {
+      return;
+    }
+
+    if (!user?.uid) {
+      Alert.alert(t("common.error"), notAuthenticatedMessage);
+      return;
+    }
+
+    setBackupLoading(true);
+    try {
+      const result = await exportManualBackupToJSON(user.uid);
+
+      if (result.error) {
+        Alert.alert(t("common.error"), result.error);
+        return;
+      }
+
+      setLastBackupAt(result.createdAt);
+      Alert.alert(
+        t("common.success"),
+        result.shareAvailable
+          ? t("profile.backupSaved", { filename: result.filename })
+          : t("profile.backupSavedWithoutShare", { filename: result.filename })
+      );
+    } catch (error) {
+      Alert.alert(t("common.error"), error.message);
+    } finally {
+      setBackupLoading(false);
+    }
   };
 
   const handleLanguageChange = () => {
@@ -723,9 +765,22 @@ export const ProfileScreen = ({ navigation }) => {
               styles={styles}
               icon="cloud-upload-outline"
               label={t("profile.backupSync")}
-              subtitle={t("profile.lastSynced", { time: t("common.justNow") })}
+              subtitle={
+                backupLoading
+                  ? t("profile.backupInProgress")
+                  : lastBackupAt
+                    ? t("profile.backupCompleted", {
+                      time: formatBackupTime(lastBackupAt),
+                    })
+                    : t("profile.backupJsonSubtitle")
+              }
               color={colors.primary}
-              onPress={() => { }}
+              onPress={backupLoading ? undefined : handleManualBackup}
+              rightElement={
+                backupLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : undefined
+              }
             />
             <SettingRow
               colors={colors}

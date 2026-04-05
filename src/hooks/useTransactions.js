@@ -104,7 +104,7 @@ export const useTransactions = () => {
       // Check budget and warn if needed
       const now = new Date();
       try {
-        await updateBudgetSpent(user.uid, data.categoryId, now.getFullYear(), now.getMonth() + 1, data.amount);
+        await updateBudgetSpent(accountId, data.categoryId, now.getFullYear(), now.getMonth() + 1, data.amount);
       } catch (sideEffectError) {
         console.warn('Budget spent update failed:', sideEffectError);
       }

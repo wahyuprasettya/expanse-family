@@ -1,12 +1,110 @@
 // ============================================================
-// Export Service (Excel + PDF)
+// Export Service (JSON + CSV + PDF)
 // ============================================================
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import { format } from 'date-fns';
 import { enUS, id as localeId } from 'date-fns/locale';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { translations } from '@localization/translations';
+import { db } from '@services/firebase/config';
+import { serializeFirestoreValue } from '@utils/firestore';
+
+const sortBackupItems = (items = []) => [...items].sort((first, second) => {
+  const firstDate = first?.date || first?.dueDate || first?.createdAt || first?.updatedAt || '';
+  const secondDate = second?.date || second?.dueDate || second?.createdAt || second?.updatedAt || '';
+
+  return String(secondDate).localeCompare(String(firstDate));
+});
+
+const getUserCollectionData = async (collectionName, userId) => {
+  const snapshot = await getDocs(
+    query(collection(db, collectionName), where('userId', '==', userId))
+  );
+
+  return snapshot.docs.map((document) =>
+    serializeFirestoreValue({
+      id: document.id,
+      ...document.data(),
+    })
+  );
+};
+
+export const exportManualBackupToJSON = async (userId) => {
+  try {
+    if (!userId) {
+      throw new Error('User is not authenticated.');
+    }
+
+    if (!FileSystem.documentDirectory) {
+      throw new Error('Storage directory is not available.');
+    }
+
+    const allTransactions = await getUserCollectionData('transactions', userId);
+    const savedDebts = await getUserCollectionData('debts', userId);
+    const transactions = sortBackupItems(
+      allTransactions.filter((transaction) => transaction.type !== 'debt')
+    );
+    const debts = sortBackupItems(
+      savedDebts.length > 0
+        ? savedDebts
+        : allTransactions.filter((transaction) => transaction.type === 'debt')
+    );
+
+    const createdAt = new Date().toISOString();
+    const filename = `backup-${format(new Date(createdAt), 'yyyy-MM-dd')}.json`;
+    const fileUri = `${FileSystem.documentDirectory}${filename}`;
+    const backupPayload = {
+      version: '1.0',
+      createdAt,
+      data: {
+        transactions,
+        debts,
+      },
+    };
+
+    await FileSystem.writeAsStringAsync(
+      fileUri,
+      JSON.stringify(backupPayload, null, 2),
+      {
+        encoding: FileSystem.EncodingType.UTF8,
+      }
+    );
+
+    const shareAvailable = await Sharing.isAvailableAsync();
+    if (shareAvailable) {
+      await Sharing.shareAsync(fileUri, {
+        mimeType: 'application/json',
+        dialogTitle: 'Share backup file',
+      });
+    }
+
+    return {
+      uri: fileUri,
+      filename,
+      createdAt,
+      shareAvailable,
+      counts: {
+        transactions: transactions.length,
+        debts: debts.length,
+      },
+      error: null,
+    };
+  } catch (error) {
+    return {
+      uri: null,
+      filename: null,
+      createdAt: null,
+      shareAvailable: false,
+      counts: {
+        transactions: 0,
+        debts: 0,
+      },
+      error: error.message,
+    };
+  }
+};
 
 // ─── Export to CSV (Excel-compatible) ────────────────────────
 export const exportToCSV = async (transactions, summary = null, filename = 'transactions', language = 'id') => {

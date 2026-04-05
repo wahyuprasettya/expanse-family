@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
-import { selectUser } from '@store/authSlice';
+import { selectProfile, selectUser } from '@store/authSlice';
 import { selectBudgets, selectBudgetsLoading, removeBudgetLocal } from '@store/budgetSlice';
 import { selectTransactions } from '@store/transactionSlice';
 import { addBudget, deleteBudget } from '@services/firebase/budgets';
@@ -31,10 +31,12 @@ export const BudgetScreen = ({ navigation }) => {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
   const user = useSelector(selectUser);
+  const profile = useSelector(selectProfile);
   const budgets = useSelector(selectBudgets);
   const budgetsLoading = useSelector(selectBudgetsLoading);
   const transactions = useSelector(selectTransactions);
   const categories = useSelector(selectCategories);
+  const accountId = profile?.householdId || user?.uid;
   const now = new Date();
   const [year] = useState(now.getFullYear());
   const [month] = useState(now.getMonth() + 1);
@@ -52,7 +54,7 @@ export const BudgetScreen = ({ navigation }) => {
     const categoryName = getCategoryDisplayName(selectedCategory);
 
     setLoading(true);
-    const { error } = await addBudget(user.uid, {
+    const { error } = await addBudget(accountId, {
       categoryId: selectedCategory.id,
       categoryName,
       categoryIcon: selectedCategory.icon,
@@ -170,6 +172,7 @@ export const BudgetScreen = ({ navigation }) => {
 
   const totalBudget = budgetList.reduce((sum, budget) => sum + budget.amount, 0);
   const totalSpent = budgetList.reduce((sum, budget) => sum + (budget.spent || 0), 0);
+  const showSharedAssetHint = profile?.householdRole === 'partner' || Boolean(profile?.householdId && profile?.householdId !== user?.uid);
 
 
   if (budgetsLoading && budgetList.length === 0) {
@@ -223,6 +226,29 @@ export const BudgetScreen = ({ navigation }) => {
           </View>
         </View>
       )}
+
+      {showSharedAssetHint ? (
+        <TouchableOpacity
+          style={styles.sharedAssetCard}
+          activeOpacity={0.86}
+          onPress={() => navigation.navigate('Assets')}
+        >
+          <View style={styles.sharedAssetIcon}>
+            <Ionicons name="diamond-outline" size={20} color={colors.warning} />
+          </View>
+          <View style={styles.sharedAssetInfo}>
+            <Text style={styles.sharedAssetTitle}>
+              {language === 'en' ? 'Manage shared household assets' : 'Kelola aset akun gabungan'}
+            </Text>
+            <Text style={styles.sharedAssetSubtitle}>
+              {language === 'en'
+                ? 'Assets from both accounts are available in one shared place.'
+                : 'Aset dari kedua akun sekarang tersedia di satu tempat yang sama.'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+      ) : null}
 
       {budgetList.length === 0 ? (
         <View style={styles.empty}>
@@ -339,6 +365,41 @@ const createStyles = (colors) => StyleSheet.create({
     overflow: 'hidden',
   },
   overallFill: { height: '100%', borderRadius: BORDER_RADIUS.full },
+  sharedAssetCard: {
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
+    backgroundColor: colors.surface,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    ...SHADOWS.sm,
+  },
+  sharedAssetIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: BORDER_RADIUS.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${colors.warning}18`,
+  },
+  sharedAssetInfo: { flex: 1 },
+  sharedAssetTitle: {
+    color: colors.textPrimary,
+    fontSize: FONT_SIZE.md,
+    fontFamily: FONT_FAMILY.semibold,
+  },
+  sharedAssetSubtitle: {
+    color: colors.textSecondary,
+    fontSize: FONT_SIZE.sm,
+    fontFamily: FONT_FAMILY.regular,
+    marginTop: 2,
+    lineHeight: 20,
+  },
   list: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl + 40 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyIcon: { fontSize: 60, marginBottom: SPACING.md },

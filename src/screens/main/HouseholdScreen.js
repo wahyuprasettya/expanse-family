@@ -27,6 +27,7 @@ export const HouseholdScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
 
   const isOwner = (profile?.householdRole || 'owner') === 'owner';
+  const isPartner = profile?.householdRole === 'partner';
   const shareCode = profile?.shareCode || '-';
 
   const handleJoin = async () => {
@@ -89,13 +90,15 @@ export const HouseholdScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Kode Pasangan Anda</Text>
-          <Text style={styles.codeValue} selectable>{shareCode}</Text>
-          <Text style={styles.sectionHint}>
-            Bagikan kode ini ke istri Anda. Setelah ia memasukkan kode ini, transaksi kalian akan masuk ke rumah tangga yang sama.
-          </Text>
-        </View>
+        {isOwner ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Kode Pasangan Anda</Text>
+            <Text style={styles.codeValue} selectable>{shareCode}</Text>
+            <Text style={styles.sectionHint}>
+              Bagikan kode ini ke istri Anda. Setelah ia memasukkan kode ini, transaksi dan aset kalian akan masuk ke rumah tangga yang sama.
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Status Rumah Tangga</Text>
@@ -113,22 +116,31 @@ export const HouseholdScreen = ({ navigation }) => {
           </View>
         </View>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Gabung dengan Kode Pasangan</Text>
-          <Input
-            label="Kode pasangan"
-            value={joinCode}
-            onChangeText={setJoinCode}
-            placeholder="Contoh: A1B2C3"
-            autoCapitalize="characters"
-            icon="people-outline"
-          />
-          <Button
-            title="Hubungkan Akun"
-            onPress={handleJoin}
-            loading={loading}
-          />
-        </View>
+        {!isPartner ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Gabung dengan Kode Pasangan</Text>
+            <Input
+              label="Kode pasangan"
+              value={joinCode}
+              onChangeText={setJoinCode}
+              placeholder="Contoh: A1B2C3"
+              autoCapitalize="characters"
+              icon="people-outline"
+            />
+            <Button
+              title="Hubungkan Akun"
+              onPress={handleJoin}
+              loading={loading}
+            />
+          </View>
+        ) : (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Akun Sudah Terhubung</Text>
+            <Text style={styles.sectionHint}>
+              Akun ini sudah tergabung ke rumah tangga bersama. Tampilan share code disembunyikan di akun partner.
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

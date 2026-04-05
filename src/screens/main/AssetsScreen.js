@@ -272,8 +272,8 @@ export const AssetsScreen = ({ navigation }) => {
     };
 
     dispatch(addAssetLocal(assetPayload));
-    if (user?.uid) {
-      const { id, error } = await addAsset(user.uid, assetPayload);
+    if (accountId && user?.uid) {
+      const { id, error } = await addAsset(accountId, assetPayload);
       if (error) {
         Alert.alert(t('common.error'), error);
       } else {
