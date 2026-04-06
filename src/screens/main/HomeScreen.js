@@ -419,8 +419,9 @@ export const HomeScreen = ({ navigation }) => {
               </View>
             </View>
           </View>
+        </LinearGradient>
 
-          {/* Balance Card */}
+        <View style={styles.content}>
           <LinearGradient
             colors={colors.gradients.primary}
             start={{ x: 0, y: 0 }}
@@ -472,9 +473,7 @@ export const HomeScreen = ({ navigation }) => {
               </View>
             </View>
           </LinearGradient>
-        </LinearGradient>
 
-        <View style={styles.content}>
           {/* Savings Rate */}
           {insights.savingsRate >= 0 && (
             <View style={styles.savingsCard}>
@@ -652,17 +651,21 @@ export const HomeScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => StyleSheet.create({
+const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => {
+  const contentOverlap = isCompact ? SPACING.xl + SPACING.xs : SPACING.xl + SPACING.md;
+  const headerBottomGap = isCompact ? SPACING.lg : SPACING.xl + SPACING.xs;
+
+  return StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1, backgroundColor: colors.background },
   containerContent: { paddingBottom: Math.max(bottomInset + 110, 140) },
   header: {
     paddingHorizontal: 0,
-    paddingBottom: isCompact ? SPACING.md : SPACING.lg,
+    paddingBottom: 0,
   },
   headerTop: {
     paddingTop: 0,
-    marginBottom: SPACING.lg,
+    marginBottom: headerBottomGap,
   },
   headerInfo: { width: '100%' },
   greetingCardShell: {
@@ -799,7 +802,7 @@ const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => StyleShee
   balanceCard: {
     borderRadius: BORDER_RADIUS.xl,
     padding: isCompact ? SPACING.md : SPACING.lg,
-    marginHorizontal: isCompact ? SPACING.md : SPACING.lg,
+    marginBottom: isCompact ? SPACING.md : SPACING.lg,
     ...SHADOWS.lg,
   },
   balanceLabel: { color: 'rgba(255,255,255,0.7)', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.medium, fontFamily: FONT_FAMILY.medium },
@@ -825,7 +828,16 @@ const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => StyleShee
   },
   statLabel: { color: 'rgba(255,255,255,0.6)', fontSize: FONT_SIZE.xs, fontFamily: FONT_FAMILY.regular },
   statValue: { fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, fontFamily: FONT_FAMILY.bold },
-  content: { padding: isCompact ? SPACING.md : SPACING.lg },
+  content: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: BORDER_RADIUS.xl - SPACING.sm,
+    borderTopRightRadius: BORDER_RADIUS.xl - SPACING.sm,
+    marginTop: -contentOverlap,
+    paddingTop: contentOverlap + (isCompact ? SPACING.xs : SPACING.sm),
+    paddingHorizontal: isCompact ? SPACING.md : SPACING.lg,
+    paddingBottom: isCompact ? SPACING.md : SPACING.lg,
+    zIndex: 1,
+  },
   savingsCard: {
     backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.lg,
@@ -957,6 +969,7 @@ const createStyles = (colors, { isCompact, isNarrow, bottomInset }) => StyleShee
     alignItems: 'center', justifyContent: 'center',
   },
   bottomSpacer: { height: Math.max(bottomInset + 32, 96) },
-});
+  });
+};
 
 export default HomeScreen;

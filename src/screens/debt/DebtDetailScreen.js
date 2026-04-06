@@ -252,12 +252,14 @@ export const DebtDetailScreen = ({ navigation, route }) => {
             title={paymentActionLabel}
             onPress={openPaymentModal}
             disabled={!canRecordPayment}
+            size="md"
             style={styles.primaryAction}
           />
           <Button
             title={t('debts.editAction')}
             variant="secondary"
             onPress={() => navigation.navigate('AddDebt', { debtId: debt.id, debt })}
+            size="md"
             style={styles.secondaryAction}
           />
         </View>
@@ -623,12 +625,12 @@ const createStyles = (colors, { isCompact, bottomInset }) => StyleSheet.create({
     paddingBottom: Math.max(bottomInset + SPACING.xl, SPACING.xxl),
   },
   actionsRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: SPACING.sm,
     marginBottom: SPACING.md,
   },
-  primaryAction: { flex: 1 },
-  secondaryAction: { flex: 1 },
+  primaryAction: { width: '100%' },
+  secondaryAction: { width: '100%' },
   noticeCard: {
     flexDirection: 'row',
     alignItems: 'center',
